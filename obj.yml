@@ -1,0 +1,11 @@
+apiVersion: kopf.dev.llmrequests/v1
+kind: LLMRequest
+metadata:
+  name: baegent
+
+prompt: |
+  what is the capital of the moon?
+
+  output your response in a directory called /data/output
+
+  this is a directory being served with a http server. you do not need to start the server, but you should create an index.html in this directory to show the user your response.

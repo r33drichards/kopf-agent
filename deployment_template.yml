@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent
+  template:
+    metadata:
+      labels:
+        app: agent
+    spec:
+      containers:
+        - name: agent
+          image: wholelottahoopla/agent:ce6f5b4d19bd142a45784139a187e24ebc44b933
+          args:
+            - --initial-user-input
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-api-key
+                  key: ANTHROPIC_API_KEY
+          volumeMounts:
+            - name: output-volume
+              mountPath: /data/output
+      volumes:
+        - name: output-volume
+          hostPath:
+            path: /data/output
+            type: Directory

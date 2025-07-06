@@ -216,7 +216,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
     try:
         core_v1_api.create_namespaced_persistent_volume_claim(
             body=metadata_pvc,
-            namespace=namespace
+            namespace="default"
         )
     except kubernetes.client.exceptions.ApiException as e:
         if e.status != 409:
@@ -224,7 +224,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
     try:
         core_v1_api.create_namespaced_persistent_volume_claim(
             body=data_pvc,
-            namespace=namespace
+            namespace="default"
         )
     except kubernetes.client.exceptions.ApiException as e:
         if e.status != 409:
@@ -327,7 +327,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
     )
     kubernetes.client.AppsV1Api().create_namespaced_deployment(
         body=deployment,
-        namespace=namespace
+        namespace="default"
     )
     logger.info("created deployment")
     logger.info("creating nginx configmap")
@@ -349,14 +349,14 @@ http {{
     )
     try:
         core_v1_api.create_namespaced_config_map(
-            namespace=namespace,
+            namespace="default",
             body=nginx_configmap
         )
     except kubernetes.client.exceptions.ApiException as e:
         if e.status == 409:  # AlreadyExists
             core_v1_api.replace_namespaced_config_map(
                 name=configmap_name,
-                namespace=namespace,
+                namespace="default",
                 body=nginx_configmap
             )
         else:
@@ -409,7 +409,7 @@ http {{
     )
     kubernetes.client.AppsV1Api().create_namespaced_deployment(
         body=nginx_deployment,
-        namespace=namespace
+        namespace="default"
     )
     logger.info("created nginx deployment")
 
@@ -426,7 +426,7 @@ def delete_fn(body, name, namespace, logger, **kwargs):
     try:
         kubernetes.client.AppsV1Api().delete_namespaced_deployment(
             name=metadata_name,
-            namespace=namespace
+            namespace="default"
         )
     except ApiException as e:
         if e.status != 404:
@@ -436,7 +436,7 @@ def delete_fn(body, name, namespace, logger, **kwargs):
     try:
         kubernetes.client.CoreV1Api().delete_namespaced_config_map(
             name=f"{metadata_name}-nginx-config",
-            namespace=namespace
+            namespace="default"
         )
     except ApiException as e:
         if e.status != 404:
@@ -446,7 +446,7 @@ def delete_fn(body, name, namespace, logger, **kwargs):
     try:
         kubernetes.client.AppsV1Api().delete_namespaced_deployment(
             name=f"{metadata_name}-nginx",
-            namespace=namespace
+            namespace="default"
         )
     except ApiException as e:
         if e.status != 404:
@@ -456,7 +456,7 @@ def delete_fn(body, name, namespace, logger, **kwargs):
     try:
         kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
             name=f"{metadata_name}-metadata",
-            namespace=namespace
+            namespace="default"
         )
     except ApiException as e:
         if e.status != 404:
@@ -465,7 +465,7 @@ def delete_fn(body, name, namespace, logger, **kwargs):
     try:
         kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
             name=f"{metadata_name}-data",
-            namespace=namespace
+            namespace="default"
         )
     except ApiException as e:
         if e.status != 404:

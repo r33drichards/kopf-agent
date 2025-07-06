@@ -116,4 +116,28 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: kopfexample-account
-    namespace: kopfexample 
+    namespace: kopfexample
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployment-manager
+  namespace: kopfexample
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployment-manager-binding
+  namespace: kopfexample
+subjects:
+- kind: ServiceAccount
+  name: kopfexample-account
+  namespace: kopfexample
+roleRef:
+  kind: Role
+  name: deployment-manager
+  apiGroup: rbac.authorization.k8s.io 

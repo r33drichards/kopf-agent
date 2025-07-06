@@ -271,7 +271,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
                             image_pull_policy="Always",
                             args=[
                                 "--port",
-                                "8080",
+                                "8081",
                                 "--working-dir",
                                 "/data/output", 
                                 "--metadata-dir",
@@ -301,7 +301,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
                             ports=[
                                 kubernetes.client.V1ContainerPort(
                                     name="http",
-                                    container_port=8080
+                                    container_port=8081
                                 )
                             ]
                         ),
@@ -317,7 +317,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
                                 kubernetes.client.V1EnvVar(
                                     name="DOCKER_USER",
                                     value="coder"
-                                )
+                                ),
                             ],
                             volume_mounts=[
                                 kubernetes.client.V1VolumeMount(

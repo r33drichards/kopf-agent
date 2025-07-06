@@ -19,3 +19,4 @@ spec:
       containers:
       - name: the-only-one
         image: wholelottahoopla/kopf-agent:latest 
+        imagePullPolicy: Always

@@ -304,6 +304,33 @@ def create_fn(body, name, namespace, logger, **kwargs):
                                     container_port=8080
                                 )
                             ]
+                        ),
+                        kubernetes.client.V1Container(
+                            name=f"{metadata_name}-code-server",
+                            image="bencdr/code-server-deploy-container:latest",
+                            image_pull_policy="Always",
+                            env=[
+                                kubernetes.client.V1EnvVar(
+                                    name="PASSWORD",
+                                    value="12345"
+                                ),
+                                kubernetes.client.V1EnvVar(
+                                    name="DOCKER_USER",
+                                    value="coder"
+                                )
+                            ],
+                            volume_mounts=[
+                                kubernetes.client.V1VolumeMount(
+                                    name=f"{metadata_name}-data",
+                                    mount_path="/home/coder/project"
+                                )
+                            ],
+                            ports=[
+                                kubernetes.client.V1ContainerPort(
+                                    name="code-server",
+                                    container_port=8080
+                                )
+                            ]
                         )
                     ],
                     volumes=[
@@ -342,6 +369,19 @@ def create_fn(body, name, namespace, logger, **kwargs):
         namespace=namespace
     )
     logger.info("created service")
+    logger.info("creating code-server service")
+    code_server_service = kubernetes.client.V1Service(
+        metadata=kubernetes.client.V1ObjectMeta(name=f"{metadata_name}-code-server"),
+        spec=kubernetes.client.V1ServiceSpec(
+            selector={"app": metadata_name},
+            ports=[kubernetes.client.V1ServicePort(port=8081, target_port=8080, name="code-server")]
+        )
+    )
+    kubernetes.client.CoreV1Api().create_namespaced_service(
+        body=code_server_service,
+        namespace=namespace
+    )
+    logger.info("created code-server service")
     logger.info("creating nginx configmap")
     nginx_conf = f"""
 events {{}}
@@ -467,6 +507,16 @@ def delete_fn(body, name, namespace, logger, **kwargs):
         if e.status != 404:
             raise
     logger.info("deleted service")
+    logger.info("deleting code-server service")
+    try:
+        kubernetes.client.CoreV1Api().delete_namespaced_service(
+            name=f"{metadata_name}-code-server",
+            namespace=namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted code-server service")
     logger.info("deleting pvc")
     try:
         kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(

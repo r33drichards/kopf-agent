@@ -30,6 +30,9 @@ rules:
   - apiGroups: [kopf.dev]
     resources: [kopfexamples]
     verbs: [list, watch]
+  - apiGroups: [kopf.dev.llmrequests]
+    resources: [llmrequests]
+    verbs: [list, watch, get, patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -77,4 +80,40 @@ roleRef:
   name: kopfexample-role-namespaced
 subjects:
   - kind: ServiceAccount
-    name: kopfexample-account 
+    name: kopfexample-account
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: kopfexample-role-namespaced
+rules:
+  - apiGroups: [kopf.dev]
+    resources: [kopfpeerings]
+    verbs: [list, watch, patch, get]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+  - apiGroups: [kopf.dev]
+    resources: [kopfexamples]
+    verbs: [list, watch, patch]
+  - apiGroups: [batch, extensions]
+    resources: [jobs]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [pods, persistentvolumeclaims]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: default
+  name: kopfexample-rolebinding-namespaced
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kopfexample-role-namespaced
+subjects:
+  - kind: ServiceAccount
+    name: kopfexample-account
+    namespace: kopfexample 

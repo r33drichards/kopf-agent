@@ -27,7 +27,7 @@
           config = {
             Entrypoint = [ "${entrypoint}" ];
             WorkingDir = "/app";
-            Env = [ "PYTHONUNBUFFERED=1" ];
+            Env = [ "PYTHONUNBUFFERED=1"  ];
           };
         };
         defaultPackage = self.packages.${system}.dockerImage;

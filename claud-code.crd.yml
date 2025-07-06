@@ -1,0 +1,24 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: claud-code.kopf.dev.claud-code
+spec:
+  scope: Namespaced
+  group: kopf.dev.claud-code
+  names:
+    kind: ClaudCode
+    plural: claud-code
+    singular: claud-code
+    shortNames:
+      - claud-code
+      - cc
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            data:
+              type: object

@@ -87,7 +87,6 @@ prompt: |
         verbs: ["get", "list", "watch"] 
 
 
-  you have a postgres database in the cluster. find it and connect to it, then show me the tables and schema of the database. 
 
   output your response in a directory called /data/output
 

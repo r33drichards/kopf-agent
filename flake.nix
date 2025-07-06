@@ -15,7 +15,7 @@
         pythonEnv = pkgs.python311.withPackages (ps: with ps; [ pip kopf kubernetes python-dotenv ]);
         entrypoint = pkgs.writeScript "entrypoint.sh" ''
           #!${pkgs.bash}/bin/bash
-          ${pythonEnv}/bin/kopf run ${./main.py} --verbose "$@"
+          ${pkgs.python311Packages.kopf}/bin/kopf run ${./main.py} --verbose "$@"
         '';
       in {
         packages.dockerImage = pkgs.dockerTools.streamLayeredImage {
@@ -23,7 +23,7 @@
           tag = "latest";
           maxLayers = 120;
 
-          contents = [ pythonEnv ];
+          contents = [ pythonEnv pkgs.fakeNss ];
           config = {
             Entrypoint = [ "${entrypoint}" ];
             WorkingDir = "/app";

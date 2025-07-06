@@ -15,7 +15,7 @@
         pythonEnv = pkgs.python311.withPackages (ps: with ps; [ pip kopf kubernetes python-dotenv ]);
         entrypoint = pkgs.writeShellScriptBin "entrypoint" ''
           #!${pkgs.bash}/bin/bash
-          exec ${lib.getExe pkgs.python311Packages.kopf} ${./main.py} "$@"
+          exec ${lib.getExe pkgs.python311Packages.kopf} run ${./main.py} -verbose "$@"
         '';
       in {
         packages.dockerImage = pkgs.dockerTools.streamLayeredImage {

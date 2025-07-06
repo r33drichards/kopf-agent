@@ -219,10 +219,43 @@ def create_fn(body, name, namespace, logger, **kwargs):
     logger.info("updating claud-code")
     logger.info("updating claud-code")
     # create a deployment for wholelottahoopla/webagent:latest 
-    # with metdatda dir pvc 
+    # with metadata dir pvc 
     # and a data dir pvc 
-    # and creaat a nginx deployment to serve the data dir
-    # also creaate  a service for webagent
+    # and create a nginx deployment to serve the data dir
+    # also create a service for webagent
+    # create PVCs first
+    core_v1_api = kubernetes.client.CoreV1Api()
+    metadata_pvc = kubernetes.client.V1PersistentVolumeClaim(
+        metadata=kubernetes.client.V1ObjectMeta(name=f"{metadata_name}-metadata"),
+        spec=kubernetes.client.V1PersistentVolumeClaimSpec(
+            access_modes=["ReadWriteOnce"],
+            resources=kubernetes.client.V1ResourceRequirements(requests={"storage": "1Gi"})
+        )
+    )
+    data_pvc = kubernetes.client.V1PersistentVolumeClaim(
+        metadata=kubernetes.client.V1ObjectMeta(name=f"{metadata_name}-data"),
+        spec=kubernetes.client.V1PersistentVolumeClaimSpec(
+            access_modes=["ReadWriteOnce"],
+            resources=kubernetes.client.V1ResourceRequirements(requests={"storage": "1Gi"})
+        )
+    )
+    try:
+        core_v1_api.create_namespaced_persistent_volume_claim(
+            body=metadata_pvc,
+            namespace=namespace
+        )
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+    try:
+        core_v1_api.create_namespaced_persistent_volume_claim(
+            body=data_pvc,
+            namespace=namespace
+        )
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+    logger.info("created PVCs")
     deployment = kubernetes.client.V1Deployment(
         metadata=kubernetes.client.V1ObjectMeta(name=metadata_name),
         spec=kubernetes.client.V1DeploymentSpec(
@@ -257,7 +290,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
                             ],
                             volume_mounts=[
                                 kubernetes.client.V1VolumeMount(
-                                    name=f"{metadata_name}",
+                                    name=f"{metadata_name}-data",
                                     mount_path="/data/output"
                                 ),
                                 kubernetes.client.V1VolumeMount(
@@ -267,7 +300,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
                             ],
                             ports=[
                                 kubernetes.client.V1ContainerPort(
-                                    name=metadata_name,
+                                    name="http",
                                     container_port=8080
                                 )
                             ]
@@ -275,15 +308,15 @@ def create_fn(body, name, namespace, logger, **kwargs):
                     ],
                     volumes=[
                         kubernetes.client.V1Volume(
-                            name=f"{metadata_name}",
-                            host_path=kubernetes.client.V1HostPathVolumeSource(
-                                path="/data/output"
+                            name=f"{metadata_name}-data",
+                            persistent_volume_claim=kubernetes.client.V1PersistentVolumeClaimVolumeSource(
+                                claim_name=f"{metadata_name}-data"
                             )
                         ),
                         kubernetes.client.V1Volume(
                             name=f"{metadata_name}-metadata",
-                            host_path=kubernetes.client.V1HostPathVolumeSource(
-                                path="/data/metadata"
+                            persistent_volume_claim=kubernetes.client.V1PersistentVolumeClaimVolumeSource(
+                                claim_name=f"{metadata_name}-metadata"
                             )
                         )
                     ]
@@ -293,7 +326,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
     )
     kubernetes.client.AppsV1Api().create_namespaced_deployment(
         body=deployment,
-        namespace="default"
+        namespace=namespace
     )
     logger.info("created deployment")
     logger.info("creating service")
@@ -301,12 +334,12 @@ def create_fn(body, name, namespace, logger, **kwargs):
         metadata=kubernetes.client.V1ObjectMeta(name=metadata_name),
         spec=kubernetes.client.V1ServiceSpec(
             selector={"app": metadata_name},
-            ports=[kubernetes.client.V1ServicePort(port=8080)]
+            ports=[kubernetes.client.V1ServicePort(port=8080, target_port=8080, name="http")]
         )
     )
     kubernetes.client.CoreV1Api().create_namespaced_service(
         body=service,
-        namespace="default"
+        namespace=namespace
     )
     logger.info("created service")
     logger.info("creating nginx configmap")
@@ -326,24 +359,22 @@ http {{
         metadata=kubernetes.client.V1ObjectMeta(name=configmap_name),
         data={"nginx.conf": nginx_conf}
     )
-    core_v1_api = kubernetes.client.CoreV1Api()
     try:
         core_v1_api.create_namespaced_config_map(
-            namespace="default",
+            namespace=namespace,
             body=nginx_configmap
         )
     except kubernetes.client.exceptions.ApiException as e:
         if e.status == 409:  # AlreadyExists
             core_v1_api.replace_namespaced_config_map(
                 name=configmap_name,
-                namespace="default",
+                namespace=namespace,
                 body=nginx_configmap
             )
         else:
             raise
     logger.info("created nginx configmap")
     logger.info("creating nginx deployment")
-    # create a nginx deployment to serve the data dir
     nginx_name = f"{metadata_name}-nginx"
     nginx_deployment = kubernetes.client.V1Deployment(
         metadata=kubernetes.client.V1ObjectMeta(name=nginx_name),
@@ -359,7 +390,7 @@ http {{
                             image="nginx:latest",
                             volume_mounts=[
                                 kubernetes.client.V1VolumeMount(
-                                    name=f"{metadata_name}",
+                                    name=f"{metadata_name}-data",
                                     mount_path="/data/output"
                                 ),
                                 kubernetes.client.V1VolumeMount(
@@ -372,9 +403,9 @@ http {{
                     ],
                     volumes=[
                         kubernetes.client.V1Volume(
-                            name=f"{metadata_name}",
-                            host_path=kubernetes.client.V1HostPathVolumeSource(
-                                path="/data/output"
+                            name=f"{metadata_name}-data",
+                            persistent_volume_claim=kubernetes.client.V1PersistentVolumeClaimVolumeSource(
+                                claim_name=f"{metadata_name}-data"
                             )
                         ),
                         kubernetes.client.V1Volume(
@@ -390,51 +421,22 @@ http {{
     )
     kubernetes.client.AppsV1Api().create_namespaced_deployment(
         body=nginx_deployment,
-        namespace="default"
+        namespace=namespace
     )
     logger.info("created nginx deployment")
     logger.info("creating nginx service")
-    # create a service to serve the nginx deployment
     nginx_service = kubernetes.client.V1Service(
-            metadata=kubernetes.client.V1ObjectMeta(name=nginx_name),
+        metadata=kubernetes.client.V1ObjectMeta(name=nginx_name),
         spec=kubernetes.client.V1ServiceSpec(
             selector={"app": nginx_name},
-            ports=[kubernetes.client.V1ServicePort(port=80)]
+            ports=[kubernetes.client.V1ServicePort(port=80, target_port=80, name="http")]
         )
-    )       
+    )
     kubernetes.client.CoreV1Api().create_namespaced_service(
         body=nginx_service,
-        namespace="default"
+        namespace=namespace
     )
     logger.info("created nginx service")
-    
-    # create a pvc for the metadata dir
-    metadata_pvc = kubernetes.client.V1PersistentVolumeClaim(
-        metadata=kubernetes.client.V1ObjectMeta(name=f"{metadata_name}-metadata"),
-        spec=kubernetes.client.V1PersistentVolumeClaimSpec(
-            access_modes=["ReadWriteOnce"],
-            resources=kubernetes.client.V1ResourceRequirements(requests={"storage": "1Gi"})
-        )
-    )
-    kubernetes.client.CoreV1Api().create_namespaced_persistent_volume_claim(
-        body=metadata_pvc,
-        namespace="default"
-    )
-    logger.info("created metadata pvc")
-    
-    # create a pvc for the data dir
-    data_pvc = kubernetes.client.V1PersistentVolumeClaim(
-        metadata=kubernetes.client.V1ObjectMeta(name=f"{metadata_name}-data"),
-        spec=kubernetes.client.V1PersistentVolumeClaimSpec(
-            access_modes=["ReadWriteOnce"],
-            resources=kubernetes.client.V1ResourceRequirements(requests={"storage": "1Gi"})
-        )
-    )
-    kubernetes.client.CoreV1Api().create_namespaced_persistent_volume_claim(
-        body=data_pvc,
-        namespace="default"
-    )
-    logger.info("created data pvc")
 
 
 
@@ -442,43 +444,68 @@ http {{
 # delete the deployment and service for the claud-code and nginx and remove the pvc
 @kopf.on.delete('kopf.dev.claud-code', 'v1', 'claud-code')
 def delete_fn(body, name, namespace, logger, **kwargs):
+    from kubernetes.client.exceptions import ApiException
     logging.info(f"A handler is called with body: {body}")
     metadata_name = body['metadata']['name']
     logger.info("deleting deployment")
-    kubernetes.client.AppsV1Api().delete_namespaced_deployment(
-        name=metadata_name,
-        namespace="default"
-    )
+    try:
+        kubernetes.client.AppsV1Api().delete_namespaced_deployment(
+            name=metadata_name,
+            namespace=namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
     logger.info("deleted deployment")
     logger.info("deleting service")
-    kubernetes.client.CoreV1Api().delete_namespaced_service(
-        name=metadata_name,
-        namespace="default"
-    )
+    try:
+        kubernetes.client.CoreV1Api().delete_namespaced_service(
+            name=metadata_name,
+            namespace=namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
     logger.info("deleted service")
     logger.info("deleting pvc")
-    kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
-        name=f"{metadata_name}-metadata",
-        namespace="default"
-    )
+    try:
+        kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
+            name=f"{metadata_name}-metadata",
+            namespace=namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
     logger.info("deleted metadata pvc")
-    kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
-        name=f"{metadata_name}-data",
-        namespace="default"
-    )
+    try:
+        kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
+            name=f"{metadata_name}-data",
+            namespace=namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
     logger.info("deleted data pvc")
     logger.info("deleted claud-code")
     logger.info("deleting nginx deployment")
-    kubernetes.client.AppsV1Api().delete_namespaced_deployment(
-        name=f"{metadata_name}-nginx",
-        namespace="default"
-    )
+    try:
+        kubernetes.client.AppsV1Api().delete_namespaced_deployment(
+            name=f"{metadata_name}-nginx",
+            namespace=namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
     logger.info("deleted nginx deployment")
     logger.info("deleting nginx service")
-    kubernetes.client.CoreV1Api().delete_namespaced_service(
-        name=f"{metadata_name}-nginx",
-        namespace="default"
-    )
+    try:
+        kubernetes.client.CoreV1Api().delete_namespaced_service(
+            name=f"{metadata_name}-nginx",
+            namespace=namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
     logger.info("deleted nginx service")
     logger.info("deleted claud-code")
     logger.info("deleted claud-code")

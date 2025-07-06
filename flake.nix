@@ -13,7 +13,7 @@
         pkgs = import nixpkgs { inherit system; };
         lib = pkgs.lib;
         pythonEnv = pkgs.python311.withPackages (ps: with ps; [ pip kopf kubernetes python-dotenv ]);
-        entrypoint = pkgs.writeShellScriptBin "entrypoint" ''
+        entrypoint = pkgs.writeScript "entrypoint.sh" ''
           #!${pkgs.bash}/bin/bash
           exec ${lib.getExe pkgs.python311Packages.kopf} run ${./main.py} -verbose "$@"
         '';
@@ -25,7 +25,7 @@
 
           contents = [ pythonEnv ];
           config = {
-            Entrypoint = [ "${lib.getExe entrypoint}" ];
+            Entrypoint = [ "${entrypoint}" ];
             WorkingDir = "/app";
             Env = [ "PYTHONUNBUFFERED=1" ];
           };

@@ -23,7 +23,7 @@
           tag = "latest";
           contents = [ pythonEnv ];
           config = {
-            Cmd = [ ${lib.getExe entrypoint} ];
+            Cmd = [ "${lib.getExe entrypoint}" ];
             WorkingDir = "/app";
           };
         };

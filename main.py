@@ -326,10 +326,21 @@ http {{
         metadata=kubernetes.client.V1ObjectMeta(name=configmap_name),
         data={"nginx.conf": nginx_conf}
     )
-    kubernetes.client.CoreV1Api().create_namespaced_config_map(
-        namespace="default",
-        body=nginx_configmap
-    )
+    core_v1_api = kubernetes.client.CoreV1Api()
+    try:
+        core_v1_api.create_namespaced_config_map(
+            namespace="default",
+            body=nginx_configmap
+        )
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status == 409:  # AlreadyExists
+            core_v1_api.replace_namespaced_config_map(
+                name=configmap_name,
+                namespace="default",
+                body=nginx_configmap
+            )
+        else:
+            raise
     logger.info("created nginx configmap")
     logger.info("creating nginx deployment")
     # create a nginx deployment to serve the data dir

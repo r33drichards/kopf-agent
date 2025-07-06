@@ -33,6 +33,9 @@ rules:
   - apiGroups: [kopf.dev.llmrequests]
     resources: [llmrequests]
     verbs: [list, watch, get, patch]
+  - apiGroups: [kopf.dev.claud-code]
+    resources: [claud-code]
+    verbs: [list, watch, get, patch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -88,21 +91,18 @@ metadata:
   namespace: default
   name: kopfexample-role-namespaced
 rules:
-  - apiGroups: [kopf.dev]
-    resources: [kopfpeerings]
-    verbs: [list, watch, patch, get]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
-    resources: [events]
-    verbs: [create]
-  - apiGroups: [kopf.dev]
-    resources: [kopfexamples]
-    verbs: [list, watch, patch]
-  - apiGroups: [batch, extensions]
-    resources: [jobs]
-    verbs: [create]
-  - apiGroups: [""]
-    resources: [pods, persistentvolumeclaims]
-    verbs: [create]
+    resources: ["services", "configmaps", "persistentvolumeclaims", "pods", "events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["kopf.dev"]
+    resources: ["kopfpeerings", "kopfexamples"]
+    verbs: ["list", "watch", "patch", "get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

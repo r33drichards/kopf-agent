@@ -25,7 +25,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
                     containers=[
                         kubernetes.client.V1Container(
                             name=metadata_name,
-                            image="wholelottahoopla/bash-agent:latest",
+                            image="wholelottahoopla/bash-agent:ebcabd7517370362f89c09da1504a6e2cd31cc14",
                             image_pull_policy="Always",
                             env=[
                                 kubernetes.client.V1EnvVar(
@@ -234,7 +234,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
                     containers=[
                         kubernetes.client.V1Container(
                             name=metadata_name,
-                            image="wholelottahoopla/webagent:latest",
+                            image="wholelottahoopla/webagent:ebcabd7517370362f89c09da1504a6e2cd31cc14",
                             image_pull_policy="Always",
                             args=[
                                 "--port",

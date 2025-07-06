@@ -18,13 +18,16 @@
           exec ${pythonEnv}/bin/python3  ${./main.py} "$@"
         '';
       in {
-        packages.dockerImage = pkgs.dockerTools.buildImage {
+        packages.dockerImage = pkgs.dockerTools.streamLayeredImage {
           name = "kopf-agent";
           tag = "latest";
+          maxLayers = 120;
+
           contents = [ pythonEnv ];
           config = {
-            Cmd = [ "${lib.getExe entrypoint}" ];
+            Entrypoint = [ "${lib.getExe entrypoint}" ];
             WorkingDir = "/app";
+            Env = [ "PYTHONUNBUFFERED=1" ];
           };
         };
         defaultPackage = self.packages.${system}.dockerImage;

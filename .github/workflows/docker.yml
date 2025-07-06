@@ -1,0 +1,32 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v25
+
+      - name: Build Docker image with Nix
+        run: nix build .#dockerImage
+
+      - name: Install skopeo
+        run: nix profile install nixpkgs#skopeo
+
+      - name: Push Docker image to Docker Hub
+        env:
+          SKOPEO_USER: "wholelottahoopla"
+          SKOPEO_PASS: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          TAG=$(git rev-parse HEAD)
+          echo "${SKOPEO_PASS}" | skopeo login --username "${SKOPEO_USER}" --password-stdin docker.io
+          skopeo copy docker-archive:./result docker://${SKOPEO_USER}/kopf-agent:$TAG
+          skopeo copy docker-archive:./result docker://${SKOPEO_USER}/kopf-agent:latest

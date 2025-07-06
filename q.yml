@@ -75,10 +75,19 @@ prompt: |
 
   you have the kubernetes python package installed.
 
-  query the kubernetes cluster for the pods that are running, if you are even able to connect to the cluster.
+  your cluster role is 
 
-  print a report of the resources that are available to you. 
+  apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: llm-agent-read
+    rules:
+      - apiGroups: ["*"]
+        resources: ["*"]
+        verbs: ["get", "list", "watch"] 
 
+
+  you have a postgres database in the cluster. find it and connect to it, then show me the tables and schema of the database. 
 
   output your response in a directory called /data/output
 

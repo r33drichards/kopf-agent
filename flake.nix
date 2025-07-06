@@ -13,13 +13,9 @@
         pkgs = import nixpkgs { inherit system; };
         lib = pkgs.lib;
         pythonEnv = pkgs.python311.withPackages (ps: with ps; [ pip kopf kubernetes python-dotenv ]);
-        appDir = pkgs.runCommand "app-dir" {} ''
-          mkdir -p $out
-          cp -r ${./.}/* $out/
-        '';
         entrypoint = pkgs.writeScript "entrypoint.sh" ''
           #!${pkgs.bash}/bin/bash
-          exec ${lib.getExe pkgs.python311Packages.kopf} run /app/main.py --verbose "$@"
+          ${pkgs.python311Packages.kopf}/bin/kopf run ${./main.py} --verbose "$@"
         '';
       in {
         packages.dockerImage = pkgs.dockerTools.streamLayeredImage {
@@ -27,7 +23,7 @@
           tag = "latest";
           maxLayers = 120;
 
-          contents = [ pythonEnv appDir ];
+          contents = [ pythonEnv ];
           config = {
             Entrypoint = [ "${entrypoint}" ];
             WorkingDir = "/app";

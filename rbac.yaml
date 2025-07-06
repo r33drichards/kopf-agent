@@ -1,0 +1,80 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kopfexample
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: kopfexample
+  name: kopfexample-account
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kopfexample-role-cluster
+rules:
+  - apiGroups: [kopf.dev]
+    resources: [clusterkopfpeerings]
+    verbs: [list, watch, patch, get]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [list, watch]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, watch]
+  - apiGroups: [admissionregistration.k8s.io/v1, admissionregistration.k8s.io/v1beta1]
+    resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [create, patch]
+  - apiGroups: [kopf.dev]
+    resources: [kopfexamples]
+    verbs: [list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: kopfexample
+  name: kopfexample-role-namespaced
+rules:
+  - apiGroups: [kopf.dev]
+    resources: [kopfpeerings]
+    verbs: [list, watch, patch, get]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+  - apiGroups: [kopf.dev]
+    resources: [kopfexamples]
+    verbs: [list, watch, patch]
+  - apiGroups: [batch, extensions]
+    resources: [jobs]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [pods, persistentvolumeclaims]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kopfexample-rolebinding-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kopfexample-role-cluster
+subjects:
+  - kind: ServiceAccount
+    name: kopfexample-account
+    namespace: kopfexample
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  namespace: kopfexample
+  name: kopfexample-rolebinding-namespaced
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kopfexample-role-namespaced
+subjects:
+  - kind: ServiceAccount
+    name: kopfexample-account 

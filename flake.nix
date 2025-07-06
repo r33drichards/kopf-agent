@@ -11,29 +11,19 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        lib = pkgs.lib;
         pythonEnv = pkgs.python311.withPackages (ps: with ps; [ pip kopf kubernetes python-dotenv ]);
-        src = ./.;
+        entrypoint = pkgs.writeShellScriptBin "entrypoint" ''
+          #!${pkgs.bash}/bin/bash
+          exec ${pythonEnv}/bin/python3  ${./main.py} "$@"
+        '';
       in {
         packages.dockerImage = pkgs.dockerTools.buildImage {
           name = "kopf-agent";
           tag = "latest";
-          copyToRoot = pkgs.buildEnv {
-            name = "kopf-agent-root";
-            paths = [
-              (pkgs.writeShellScriptBin "entrypoint" ''
-                #!/bin/sh
-                exec python3 /app/main.py
-              '')
-              (pkgs.runCommand "app" {} ''
-                mkdir -p $out/app
-                cp ${src}/main.py $out/app/
-                cp ${src}/pyproject.toml $out/app/ || true
-                cp ${src}/requirements.txt $out/app/ || true
-              '')
-            ];
-          };
+          contents = [ pythonEnv ];
           config = {
-            Cmd = [ "/bin/entrypoint" ];
+            Cmd = [ ${lib.getExe entrypoint} ];
             WorkingDir = "/app";
           };
         };

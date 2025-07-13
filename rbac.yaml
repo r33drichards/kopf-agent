@@ -23,7 +23,7 @@ rules:
     verbs: [list, watch]
   - apiGroups: [""]
     resources: [namespaces]
-    verbs: [list, watch]
+    verbs: [list, watch, create]
   - apiGroups: [admissionregistration.k8s.io/v1, admissionregistration.k8s.io/v1beta1]
     resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
     verbs: [create, patch]
@@ -36,6 +36,9 @@ rules:
   - apiGroups: [kopf.dev.claud-code]
     resources: [claud-code]
     verbs: [list, watch, get, patch]
+  - apiGroups: [""]
+    resources: [serviceaccounts]
+    verbs: [get, list, watch, create, patch, update, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -141,3 +144,40 @@ roleRef:
   kind: Role
   name: deployment-manager
   apiGroup: rbac.authorization.k8s.io 
+---
+# This ClusterRole allows the Kopf operator to create Roles/RoleBindings with any permissions it needs in any namespace.
+# It is required for the operator to grant RBAC permissions to other service accounts (RBAC escalation prevention).
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kopfexample-operator-global
+rules:
+  - apiGroups: [""]
+    resources: ["*", "namespaces", "serviceaccounts", "persistentvolumeclaims", "pods", "configmaps", "services"]
+    verbs: ["*"]
+  - apiGroups: ["apps"]
+    resources: ["*"]
+    verbs: ["*"]
+  - apiGroups: ["batch"]
+    resources: ["*"]
+    verbs: ["*"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["*"]
+  - apiGroups: ["kopf.dev", "kopf.dev.llmrequests", "kopf.dev.claud-code"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kopfexample-operator-global
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kopfexample-operator-global
+subjects:
+  - kind: ServiceAccount
+    name: kopfexample-account
+    namespace: kopfexample 

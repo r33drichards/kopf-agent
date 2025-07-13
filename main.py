@@ -2,6 +2,7 @@ import kopf
 import logging
 import kubernetes
 import dotenv
+from kubernetes.client.models import V1Subject
 
 dotenv.load_dotenv()
 
@@ -278,7 +279,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
             name=f"{metadata_name}-agent-role"
         ),
         subjects=[
-            kubernetes.client.V1Subject(
+            V1Subject(
                 kind="ServiceAccount",
                 name=f"{metadata_name}-agent-sa",
                 namespace=agent_namespace

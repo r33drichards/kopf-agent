@@ -22,3 +22,5 @@ spec:
           properties:
             data:
               type: object
+            system_prompt:
+              type: string

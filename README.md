@@ -13,12 +13,6 @@ deploy operator
 kubectl apply -f deployment.yaml
 ```
 
-
-
-
-
-
-
 create crd
 
 ```
@@ -36,6 +30,11 @@ deploy claud code
 ```
 kubectl apply -f cc.yml
 ```
+
+
+
+
+
 
 
 

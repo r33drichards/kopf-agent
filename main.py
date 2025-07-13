@@ -622,4 +622,84 @@ def delete_claud_code_fn(body, **kwargs):
     logger.info("deleted claud-code")
     
     
+@kopf.on.update('kopf.dev.claud-code', 'v1', 'claud-code')
+def update_system_prompt_fn(body, name, namespace, logger, diff, **kwargs):
+    import kubernetes
+    from kubernetes.client.exceptions import ApiException
+
+    metadata_name = body['metadata']['name']
+    agent_namespace = metadata_name  # Use agent name as namespace
+    new_system_prompt = body.get('system_prompt')
+
+    # Check if system_prompt changed
+    changed = False
+    for d in diff:
+        if d[1] == ('system_prompt',):
+            changed = True
+            break
+    if not changed:
+        logger.info("system_prompt not changed, skipping update.")
+        return
+
+    logger.info(f"Updating system prompt for deployment {metadata_name} in namespace {agent_namespace}")
+
+    # Get the current deployment
+    apps_v1_api = kubernetes.client.AppsV1Api()
+    try:
+        deployment = apps_v1_api.read_namespaced_deployment(
+            name=metadata_name,
+            namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status == 404:
+            logger.error(f"Deployment {metadata_name} not found in namespace {agent_namespace}")
+            return
+        else:
+            raise
+
+    # Update the system prompt in the container args
+    updated = False
+    for container in deployment.spec.template.spec.containers:
+        if container.name == metadata_name:
+            if container.args is None:
+                container.args = []
+            if "--system-prompt" in container.args:
+                idx = container.args.index("--system-prompt")
+                if idx + 1 < len(container.args):
+                    container.args[idx + 1] = new_system_prompt
+                    updated = True
+            else:
+                container.args.extend(["--system-prompt", new_system_prompt])
+                updated = True
+
+    if updated:
+        # Patch the deployment with the new args
+        try:
+            # Only patch the relevant part
+            patch_body = {
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "containers": [
+                                {
+                                    "name": metadata_name,
+                                    "args": container.args
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+            apps_v1_api.patch_namespaced_deployment(
+                name=metadata_name,
+                namespace=agent_namespace,
+                body=patch_body
+            )
+            logger.info(f"Updated system prompt for deployment {metadata_name}")
+        except ApiException as e:
+            logger.error(f"Failed to patch deployment: {e}")
+    else:
+        logger.info("No update needed for system prompt.")
+    
+    
     

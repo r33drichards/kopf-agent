@@ -1,5 +1,5 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: cc-2
+  name: cc-3
 

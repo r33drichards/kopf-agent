@@ -18,5 +18,5 @@ spec:
       serviceAccountName: kopfexample-account
       containers:
       - name: the-only-one
-        image: wholelottahoopla/kopf-agent:latest 
+        image: wholelottahoopla/kopf-agent:latest ``
         imagePullPolicy: Always

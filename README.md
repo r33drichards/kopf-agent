@@ -25,6 +25,13 @@ create crd
 kubectl apply -f claud-code.crd.yml                  
 ```
 
+create secret 
+
+```
+kubectl create secret generic anthropic-api-key \ 
+  --from-literal=ANTHROPIC_API_KEY=sk-ant-api-key
+```
+
 deploy claud code
 ```
 kubectl apply -f cc.yml

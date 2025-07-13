@@ -3,3 +3,5 @@ kind: ClaudCode
 metadata:
   name: cc-3
 
+system_prompt: |
+  you are equipped with a service account that has access to the kubernetes cluster. you can list all resources in your namespace, and also you can create services. 

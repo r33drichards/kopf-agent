@@ -192,7 +192,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
     metadata_name = body['metadata']['name']
     agent_namespace = metadata_name  # Use agent name as namespace
     logger.info(f"creating claud-code agent in namespace: {agent_namespace}")
-    
+    metadata_system_prompt = body['system_prompt']
     # Create namespace if it doesn't exist
     core_v1_api = kubernetes.client.CoreV1Api()
     rbac_v1_api = kubernetes.client.RbacAuthorizationV1Api()
@@ -353,6 +353,8 @@ def create_fn(body, name, namespace, logger, **kwargs):
                                 "/data/output", 
                                 "--metadata-dir",
                                 "/data/metadata",
+                                "--system-prompt",
+                                metadata_system_prompt
                             ],
                             env=[
                                 kubernetes.client.V1EnvVar(

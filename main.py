@@ -190,15 +190,117 @@ def delete_fn(body, name, namespace, logger, **kwargs):
 def create_fn(body, name, namespace, logger, **kwargs):
     logging.info(f"A handler is called with body: {body}")
     metadata_name = body['metadata']['name']
-    logger.info("updating claud-code")
-    logger.info("updating claud-code")
+    agent_namespace = metadata_name  # Use agent name as namespace
+    logger.info(f"creating claud-code agent in namespace: {agent_namespace}")
+    
+    # Create namespace if it doesn't exist
+    core_v1_api = kubernetes.client.CoreV1Api()
+    rbac_v1_api = kubernetes.client.RbacAuthorizationV1Api()
+    
+    try:
+        agent_ns = kubernetes.client.V1Namespace(
+            metadata=kubernetes.client.V1ObjectMeta(name=agent_namespace)
+        )
+        core_v1_api.create_namespace(body=agent_ns)
+        logger.info(f"created namespace: {agent_namespace}")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:  # AlreadyExists
+            raise
+        logger.info(f"namespace {agent_namespace} already exists")
+    
+    # Create ServiceAccount for the agent
+    service_account = kubernetes.client.V1ServiceAccount(
+        metadata=kubernetes.client.V1ObjectMeta(
+            name=f"{metadata_name}-agent-sa",
+            namespace=agent_namespace
+        )
+    )
+    try:
+        core_v1_api.create_namespaced_service_account(
+            namespace=agent_namespace,
+            body=service_account
+        )
+        logger.info(f"created service account: {metadata_name}-agent-sa")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"service account {metadata_name}-agent-sa already exists")
+    
+    # Create Role with permissions to create services and read all resources
+    role = kubernetes.client.V1Role(
+        metadata=kubernetes.client.V1ObjectMeta(
+            name=f"{metadata_name}-agent-role",
+            namespace=agent_namespace
+        ),
+        rules=[
+            kubernetes.client.V1PolicyRule(
+                api_groups=[""],
+                resources=["services"],
+                verbs=["get", "list", "watch", "create", "update", "patch", "delete"]
+            ),
+            kubernetes.client.V1PolicyRule(
+                api_groups=[""],
+                resources=["*"],
+                verbs=["get", "list", "watch"]
+            ),
+            kubernetes.client.V1PolicyRule(
+                api_groups=["apps"],
+                resources=["*"],
+                verbs=["get", "list", "watch"]
+            ),
+            kubernetes.client.V1PolicyRule(
+                api_groups=["batch"],
+                resources=["*"],
+                verbs=["get", "list", "watch"]
+            )
+        ]
+    )
+    try:
+        rbac_v1_api.create_namespaced_role(
+            namespace=agent_namespace,
+            body=role
+        )
+        logger.info(f"created role: {metadata_name}-agent-role")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"role {metadata_name}-agent-role already exists")
+    
+    # Create RoleBinding
+    role_binding = kubernetes.client.V1RoleBinding(
+        metadata=kubernetes.client.V1ObjectMeta(
+            name=f"{metadata_name}-agent-binding",
+            namespace=agent_namespace
+        ),
+        role_ref=kubernetes.client.V1RoleRef(
+            api_group="rbac.authorization.k8s.io",
+            kind="Role",
+            name=f"{metadata_name}-agent-role"
+        ),
+        subjects=[
+            kubernetes.client.V1Subject(
+                kind="ServiceAccount",
+                name=f"{metadata_name}-agent-sa",
+                namespace=agent_namespace
+            )
+        ]
+    )
+    try:
+        rbac_v1_api.create_namespaced_role_binding(
+            namespace=agent_namespace,
+            body=role_binding
+        )
+        logger.info(f"created role binding: {metadata_name}-agent-binding")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"role binding {metadata_name}-agent-binding already exists")
     # create a deployment for wholelottahoopla/webagent:latest 
     # with metadata dir pvc 
     # and a data dir pvc 
     # and create a nginx deployment to serve the data dir
     # also create a service for webagent
     # create PVCs first
-    core_v1_api = kubernetes.client.CoreV1Api()
     metadata_pvc = kubernetes.client.V1PersistentVolumeClaim(
         metadata=kubernetes.client.V1ObjectMeta(name=f"{metadata_name}-metadata"),
         spec=kubernetes.client.V1PersistentVolumeClaimSpec(
@@ -216,7 +318,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
     try:
         core_v1_api.create_namespaced_persistent_volume_claim(
             body=metadata_pvc,
-            namespace="default"
+            namespace=agent_namespace
         )
     except kubernetes.client.exceptions.ApiException as e:
         if e.status != 409:
@@ -224,7 +326,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
     try:
         core_v1_api.create_namespaced_persistent_volume_claim(
             body=data_pvc,
-            namespace="default"
+            namespace=agent_namespace
         )
     except kubernetes.client.exceptions.ApiException as e:
         if e.status != 409:
@@ -238,6 +340,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
             template=kubernetes.client.V1PodTemplateSpec(
                 metadata=kubernetes.client.V1ObjectMeta(labels={"app": metadata_name}),
                 spec=kubernetes.client.V1PodSpec(
+                    service_account_name=f"{metadata_name}-agent-sa",
                     containers=[
                         kubernetes.client.V1Container(
                             name=metadata_name,
@@ -327,7 +430,7 @@ def create_fn(body, name, namespace, logger, **kwargs):
     )
     kubernetes.client.AppsV1Api().create_namespaced_deployment(
         body=deployment,
-        namespace="default"
+        namespace=agent_namespace
     )
     logger.info("created deployment")
     logger.info("creating nginx configmap")
@@ -349,14 +452,14 @@ http {{
     )
     try:
         core_v1_api.create_namespaced_config_map(
-            namespace="default",
+            namespace=agent_namespace,
             body=nginx_configmap
         )
     except kubernetes.client.exceptions.ApiException as e:
         if e.status == 409:  # AlreadyExists
             core_v1_api.replace_namespaced_config_map(
                 name=configmap_name,
-                namespace="default",
+                namespace=agent_namespace,
                 body=nginx_configmap
             )
         else:
@@ -409,7 +512,7 @@ http {{
     )
     kubernetes.client.AppsV1Api().create_namespaced_deployment(
         body=nginx_deployment,
-        namespace="default"
+        namespace=agent_namespace
     )
     logger.info("created nginx deployment")
 
@@ -418,15 +521,17 @@ http {{
 
 # delete the deployment and service for the claud-code and nginx and remove the pvc
 @kopf.on.delete('kopf.dev.claud-code', 'v1', 'claud-code')
-def delete_fn(body, name, namespace, logger, **kwargs):
+def delete_claud_code_fn(body, **kwargs):
     from kubernetes.client.exceptions import ApiException
     logging.info(f"A handler is called with body: {body}")
     metadata_name = body['metadata']['name']
-    logger.info("deleting deployment")
+    agent_namespace = metadata_name  # Use agent name as namespace
+    logger = logging.getLogger(__name__)
+    logger.info(f"deleting claud-code agent from namespace: {agent_namespace}")
     try:
         kubernetes.client.AppsV1Api().delete_namespaced_deployment(
             name=metadata_name,
-            namespace="default"
+            namespace=agent_namespace
         )
     except ApiException as e:
         if e.status != 404:
@@ -436,7 +541,7 @@ def delete_fn(body, name, namespace, logger, **kwargs):
     try:
         kubernetes.client.CoreV1Api().delete_namespaced_config_map(
             name=f"{metadata_name}-nginx-config",
-            namespace="default"
+            namespace=agent_namespace
         )
     except ApiException as e:
         if e.status != 404:
@@ -446,7 +551,7 @@ def delete_fn(body, name, namespace, logger, **kwargs):
     try:
         kubernetes.client.AppsV1Api().delete_namespaced_deployment(
             name=f"{metadata_name}-nginx",
-            namespace="default"
+            namespace=agent_namespace
         )
     except ApiException as e:
         if e.status != 404:
@@ -456,7 +561,7 @@ def delete_fn(body, name, namespace, logger, **kwargs):
     try:
         kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
             name=f"{metadata_name}-metadata",
-            namespace="default"
+            namespace=agent_namespace
         )
     except ApiException as e:
         if e.status != 404:
@@ -465,13 +570,52 @@ def delete_fn(body, name, namespace, logger, **kwargs):
     try:
         kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
             name=f"{metadata_name}-data",
-            namespace="default"
+            namespace=agent_namespace
         )
     except ApiException as e:
         if e.status != 404:
             raise
     logger.info("deleted data pvc")
-    logger.info("deleted claud-code")
+    
+    # Clean up RBAC resources
+    try:
+        kubernetes.client.RbacAuthorizationV1Api().delete_namespaced_role_binding(
+            name=f"{metadata_name}-agent-binding",
+            namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted role binding")
+    
+    try:
+        kubernetes.client.RbacAuthorizationV1Api().delete_namespaced_role(
+            name=f"{metadata_name}-agent-role",
+            namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted role")
+    
+    try:
+        kubernetes.client.CoreV1Api().delete_namespaced_service_account(
+            name=f"{metadata_name}-agent-sa",
+            namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted service account")
+    
+    # Optionally delete the namespace (uncomment if you want to clean up completely)
+    # try:
+    #     kubernetes.client.CoreV1Api().delete_namespace(name=agent_namespace)
+    # except ApiException as e:
+    #     if e.status != 404:
+    #         raise
+    # logger.info(f"deleted namespace: {agent_namespace}")
+    
     logger.info("deleted claud-code")
     
     

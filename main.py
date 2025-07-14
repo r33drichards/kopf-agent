@@ -2,9 +2,52 @@ import kopf
 import logging
 import kubernetes
 import dotenv
+import os
+import base64
 from kubernetes.client.models import RbacV1Subject
 
 dotenv.load_dotenv()
+
+
+def ensure_api_secrets(namespace, logger):
+    """Create API key secrets if they don't exist"""
+    core_v1_api = kubernetes.client.CoreV1Api()
+    
+    # Get API keys from environment
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    
+    if anthropic_key:
+        secret_data = {"ANTHROPIC_API_KEY": base64.b64encode(anthropic_key.encode()).decode()}
+        secret = kubernetes.client.V1Secret(
+            metadata=kubernetes.client.V1ObjectMeta(name="anthropic-api-key"),
+            data=secret_data,
+            type="Opaque"
+        )
+        try:
+            core_v1_api.create_namespaced_secret(namespace=namespace, body=secret)
+            logger.info(f"Created anthropic-api-key secret in namespace {namespace}")
+        except kubernetes.client.exceptions.ApiException as e:
+            if e.status == 409:
+                logger.info(f"anthropic-api-key secret already exists in namespace {namespace}")
+            else:
+                raise
+    
+    if openai_key:
+        secret_data = {"OPENAI_API_KEY": base64.b64encode(openai_key.encode()).decode()}
+        secret = kubernetes.client.V1Secret(
+            metadata=kubernetes.client.V1ObjectMeta(name="openai-api-key"),
+            data=secret_data,
+            type="Opaque"
+        )
+        try:
+            core_v1_api.create_namespaced_secret(namespace=namespace, body=secret)
+            logger.info(f"Created openai-api-key secret in namespace {namespace}")
+        except kubernetes.client.exceptions.ApiException as e:
+            if e.status == 409:
+                logger.info(f"openai-api-key secret already exists in namespace {namespace}")
+            else:
+                raise
 
 
 @kopf.on.create("kopf.dev.llmrequests", "v1", "llmrequests")
@@ -14,6 +57,10 @@ def create_fn(body, name, namespace, logger, **kwargs):
     prompt = body["prompt"]
     metadata_name = body["metadata"]["name"]
     logger.info("got prompt", prompt)
+    
+    # Ensure API secrets exist
+    ensure_api_secrets("default", logger)
+    
     logger.info("creating job")
 
     # create a new job instead of a pod
@@ -181,7 +228,7 @@ def delete_fn(body, name, namespace, logger, **kwargs):
 
 
 @kopf.on.create("kopf.dev.claud-code", "v1", "claud-code")
-def create_fn(body, name, namespace, logger, **kwargs):
+def create_claud_code_fn(body, name, namespace, logger, **kwargs):
     logging.info(f"A handler is called with body: {body}")
     metadata_name = body["metadata"]["name"]
     agent_namespace = metadata_name  # Use agent name as namespace
@@ -201,6 +248,9 @@ def create_fn(body, name, namespace, logger, **kwargs):
         if e.status != 409:  # AlreadyExists
             raise
         logger.info(f"namespace {agent_namespace} already exists")
+    
+    # Ensure API secrets exist in the agent namespace
+    ensure_api_secrets(agent_namespace, logger)
 
     # Create ServiceAccount for the agent
     service_account = kubernetes.client.V1ServiceAccount(

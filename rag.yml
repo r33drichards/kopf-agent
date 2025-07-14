@@ -1,7 +1,7 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: cc-rag
+  name: rag
 
 system_prompt: |
   you are equipped with a service account that has access to the kubernetes cluster. 

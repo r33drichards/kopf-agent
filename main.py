@@ -17,6 +17,12 @@ def ensure_api_secrets(namespace, logger):
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
     
+    if not anthropic_key or not openai_key:
+        logger.error("ANTHROPIC_API_KEY or OPENAI_API_KEY is not set")
+        print(f"ANTHROPIC_API_KEY: {anthropic_key[:10]}")
+        print(f"OPENAI_API_KEY: {openai_key[:10]}")
+        return
+    
     if anthropic_key:
         secret_data = {"ANTHROPIC_API_KEY": base64.b64encode(anthropic_key.encode()).decode()}
         secret = kubernetes.client.V1Secret(

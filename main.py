@@ -274,7 +274,7 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
             raise
         logger.info(f"service account {metadata_name}-agent-sa already exists")
 
-    # Create Role with permissions to create services and read all resources
+    # Create Role with permissions to create services, deployments, and access data PV
     role = kubernetes.client.V1Role(
         metadata=kubernetes.client.V1ObjectMeta(
             name=f"{metadata_name}-agent-role", namespace=agent_namespace
@@ -284,6 +284,17 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                 api_groups=[""],
                 resources=["services"],
                 verbs=["get", "list", "watch", "create", "update", "patch", "delete"],
+            ),
+            kubernetes.client.V1PolicyRule(
+                api_groups=["apps"],
+                resources=["deployments"],
+                verbs=["get", "list", "watch", "create", "update", "patch", "delete"],
+            ),
+            kubernetes.client.V1PolicyRule(
+                api_groups=[""],
+                resources=["persistentvolumeclaims"],
+                resource_names=[f"{metadata_name}-data"],
+                verbs=["get", "list", "watch"],
             ),
             kubernetes.client.V1PolicyRule(
                 api_groups=[""], resources=["*"], verbs=["get", "list", "watch"]

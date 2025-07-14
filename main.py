@@ -297,6 +297,16 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                 verbs=["get", "list", "watch"],
             ),
             kubernetes.client.V1PolicyRule(
+                api_groups=[""],
+                resources=["pods"],
+                verbs=["get", "list", "watch", "create", "update", "patch", "delete"],
+            ),
+            kubernetes.client.V1PolicyRule(
+                api_groups=["batch"],
+                resources=["jobs"],
+                verbs=["get", "list", "watch", "create", "update", "patch", "delete"],
+            ),
+            kubernetes.client.V1PolicyRule(
                 api_groups=[""], resources=["*"], verbs=["get", "list", "watch"]
             ),
             kubernetes.client.V1PolicyRule(

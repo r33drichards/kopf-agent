@@ -24,6 +24,9 @@ create secret
 ```
 kubectl create secret generic anthropic-api-key \ 
   --from-literal=ANTHROPIC_API_KEY=sk-ant-api-key
+kubectl create secret generic openai-api-key \
+  --from-literal=OPENAI_API_KEY=key
+
 ```
 
 deploy claud code

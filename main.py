@@ -286,6 +286,11 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                 verbs=["get", "list", "watch", "create", "update", "patch", "delete"],
             ),
             kubernetes.client.V1PolicyRule(
+                api_groups=["networking.k8s.io"],
+                resources=["ingresses"],
+                verbs=["get", "list", "watch", "create", "update", "patch", "delete"],
+            ),
+            kubernetes.client.V1PolicyRule(
                 api_groups=["apps"],
                 resources=["deployments"],
                 verbs=["get", "list", "watch", "create", "update", "patch", "delete"],
@@ -590,6 +595,181 @@ http {{
             raise
         logger.info(f"nginx deployment {nginx_name} already exists")
 
+    # Create services for the deployments
+    logger.info("creating services")
+    
+    # Service for the main deployment (port 8080 and 8081)
+    main_service = kubernetes.client.V1Service(
+        metadata=kubernetes.client.V1ObjectMeta(
+            name=f"{metadata_name}-service",
+            namespace=agent_namespace
+        ),
+        spec=kubernetes.client.V1ServiceSpec(
+            selector={"app": metadata_name},
+            ports=[
+                kubernetes.client.V1ServicePort(
+                    name="code-server",
+                    port=8080,
+                    target_port=8080,
+                    protocol="TCP"
+                ),
+                kubernetes.client.V1ServicePort(
+                    name="http",
+                    port=8081,
+                    target_port=8081,
+                    protocol="TCP"
+                )
+            ]
+        )
+    )
+    
+    # Service for nginx deployment (port 80)
+    nginx_service = kubernetes.client.V1Service(
+        metadata=kubernetes.client.V1ObjectMeta(
+            name=f"{nginx_name}-service",
+            namespace=agent_namespace
+        ),
+        spec=kubernetes.client.V1ServiceSpec(
+            selector={"app": nginx_name},
+            ports=[
+                kubernetes.client.V1ServicePort(
+                    name="http",
+                    port=80,
+                    target_port=80,
+                    protocol="TCP"
+                )
+            ]
+        )
+    )
+    
+    try:
+        core_v1_api.create_namespaced_service(
+            namespace=agent_namespace, body=main_service
+        )
+        logger.info(f"created main service: {metadata_name}-service")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"main service {metadata_name}-service already exists")
+    
+    try:
+        core_v1_api.create_namespaced_service(
+            namespace=agent_namespace, body=nginx_service
+        )
+        logger.info(f"created nginx service: {nginx_name}-service")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"nginx service {nginx_name}-service already exists")
+
+    # Create Tailscale ingresses
+    logger.info("creating Tailscale ingresses")
+    
+    # Ingress for code-server (port 8080)
+    code_server_ingress = kubernetes.client.V1Ingress(
+        metadata=kubernetes.client.V1ObjectMeta(
+            name=f"{metadata_name}-code-server-ingress",
+            namespace=agent_namespace,
+        ),
+        spec=kubernetes.client.V1IngressSpec(
+            ingress_class_name="tailscale",
+            default_backend=kubernetes.client.V1IngressBackend(
+                service=kubernetes.client.V1IngressServiceBackend(
+                    name=f"{metadata_name}-service",
+                    port=kubernetes.client.V1ServiceBackendPort(
+                        number=8080
+                    )
+                )
+            ),
+            tls=[
+                kubernetes.client.V1IngressTLS(
+                    hosts=[f"{metadata_name}-code-server"]
+                )
+            ]
+        )
+    )
+    
+    # Ingress for http service (port 8081)
+    http_ingress = kubernetes.client.V1Ingress(
+        metadata=kubernetes.client.V1ObjectMeta(
+            name=f"{metadata_name}-http-ingress",
+            namespace=agent_namespace,
+
+        ),
+        spec=kubernetes.client.V1IngressSpec(
+            ingress_class_name="tailscale",
+            default_backend=kubernetes.client.V1IngressBackend(
+                service=kubernetes.client.V1IngressServiceBackend(
+                    name=f"{metadata_name}-service",
+                    port=kubernetes.client.V1ServiceBackendPort(
+                        number=8081
+                    )
+                )
+            ),
+            tls=[
+                kubernetes.client.V1IngressTLS(
+                    hosts=[f"{metadata_name}-http"]
+                )
+            ]
+        )
+    )
+    
+    # Ingress for nginx (port 80)
+    nginx_ingress = kubernetes.client.V1Ingress(
+        metadata=kubernetes.client.V1ObjectMeta(
+            name=f"{nginx_name}-ingress",
+            namespace=agent_namespace,
+        ),
+        spec=kubernetes.client.V1IngressSpec(
+            ingress_class_name="tailscale",
+            default_backend=kubernetes.client.V1IngressBackend(
+                service=kubernetes.client.V1IngressServiceBackend(
+                    name=f"{nginx_name}-service",
+                    port=kubernetes.client.V1ServiceBackendPort(
+                        number=80
+                    )
+                )
+            ),
+            tls=[
+                kubernetes.client.V1IngressTLS(
+                    hosts=[f"{metadata_name}-nginx"]
+                )
+            ]
+        )
+    )
+    
+    networking_v1_api = kubernetes.client.NetworkingV1Api()
+    
+    try:
+        networking_v1_api.create_namespaced_ingress(
+            namespace=agent_namespace, body=code_server_ingress
+        )
+        logger.info(f"created code-server ingress: {metadata_name}-code-server-ingress")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"code-server ingress {metadata_name}-code-server-ingress already exists")
+    
+    try:
+        networking_v1_api.create_namespaced_ingress(
+            namespace=agent_namespace, body=http_ingress
+        )
+        logger.info(f"created http ingress: {metadata_name}-http-ingress")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"http ingress {metadata_name}-http-ingress already exists")
+    
+    try:
+        networking_v1_api.create_namespaced_ingress(
+            namespace=agent_namespace, body=nginx_ingress
+        )
+        logger.info(f"created nginx ingress: {nginx_name}-ingress")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"nginx ingress {nginx_name}-ingress already exists")
+
 
 # delete the deployment and service for the claud-code and nginx and remove the pvc
 @kopf.on.delete("kopf.dev.claud-code", "v1", "claud-code")
@@ -627,6 +807,58 @@ def delete_claud_code_fn(body, **kwargs):
         if e.status != 404:
             raise
     logger.info("deleted nginx deployment")
+    
+    # Delete services
+    logger.info("deleting services")
+    try:
+        kubernetes.client.CoreV1Api().delete_namespaced_service(
+            name=f"{metadata_name}-service", namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted main service")
+    
+    try:
+        kubernetes.client.CoreV1Api().delete_namespaced_service(
+            name=f"{metadata_name}-nginx-service", namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted nginx service")
+    
+    # Delete ingresses
+    logger.info("deleting ingresses")
+    networking_v1_api = kubernetes.client.NetworkingV1Api()
+    
+    try:
+        networking_v1_api.delete_namespaced_ingress(
+            name=f"{metadata_name}-code-server-ingress", namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted code-server ingress")
+    
+    try:
+        networking_v1_api.delete_namespaced_ingress(
+            name=f"{metadata_name}-http-ingress", namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted http ingress")
+    
+    try:
+        networking_v1_api.delete_namespaced_ingress(
+            name=f"{metadata_name}-nginx-ingress", namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted nginx ingress")
+    
     logger.info("deleting pvc")
     try:
         kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(

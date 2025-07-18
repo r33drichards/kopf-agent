@@ -31,7 +31,7 @@ kubectl create secret generic openai-api-key \
 
 deploy claud code
 ```
-kubectl apply -f cc.yml
+kubectl apply -f rag.yml
 ```
 
 

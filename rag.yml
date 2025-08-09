@@ -1,7 +1,7 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: c1
+  name: claud-code
 
 system_prompt: |
   you are equipped with a service account that has access to the kubernetes cluster. 
@@ -417,4 +417,81 @@ system_prompt: |
             ),
         ],
     )
+
+
+  I want to explain tailscale ingresses and how you can create them to expose services to the user in a secure manner. 
+
+  the yaml to configure a deployment to expose a service to the user is as follows:
+    ```yaml
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: nocodb
+    labels:
+      app: nocodb
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: nocodb
+    template:
+      metadata:
+        labels:
+          app: nocodb
+      spec:
+        containers:
+          - name: nocodb
+            image: nocodb/nocodb:latest
+            ports:
+              - containerPort: 8080
+            env:
+              - name: NC_DB
+                value: "pg://postgresql:5432?u=saphira&p=saphira&d=saphira"
+              - name: NC_AUTH_JWT_SECRET
+                value: "569a1821-0a93-45e8-87ab-eb857f20a010"
+            volumeMounts:
+              - name: nocodb-data
+                mountPath: /usr/app/data
+        volumes:
+          - name: nocodb-data
+            emptyDir: {} 
+  ---
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    name: nocodb
+    annotations:
+      tailscale.com/expose: "true"
+  spec:
+    ingressClassName: tailscale
+    defaultBackend:
+      service:
+        name: nocodb
+        port:
+          number: 8080
+    tls:
+      - hosts:
+          - nocodb
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: nocodb
+    labels:
+      app: nocodb
+  spec:
+    ports:
+      - port: 8080
+        targetPort: 8080
+        protocol: TCP
+        name: http
+    selector:
+      app: nocodb
+    type: ClusterIP 
     ```
+
+    this should be your reference for how to create a deployment that exposes a service to the user in a secure manner.
+
+
+    a note about rag. when doing rag queries on a git repo, you will get back a response that contains a citation with a path to the file it is from. if that information looks useful or surrounding info could give you more context, get that context. you can clone a repo if its not already in your projects directory. 
+

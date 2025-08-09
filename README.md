@@ -23,9 +23,9 @@ create secret
 
 ```
 kubectl create secret generic anthropic-api-key \ 
-  --from-literal=ANTHROPIC_API_KEY=sk-ant-api-key
+  --from-literal=ANTHROPIC_API_KEY=sk-ant-api-key -n kopfexample
 kubectl create secret generic openai-api-key \
-  --from-literal=OPENAI_API_KEY=key
+  --from-literal=OPENAI_API_KEY=key -n kopfexample
 
 ```
 

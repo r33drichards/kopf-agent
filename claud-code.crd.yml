@@ -22,5 +22,15 @@ spec:
           properties:
             data:
               type: object
+              description: "Additional configuration data including API keys and other settings"
+              properties:
+                ANTHROPIC_API_KEY:
+                  type: string
+                  description: "Anthropic API key for Claude access"
+                OPENAI_API_KEY:
+                  type: string
+                  description: "OpenAI API key for GPT access"
+              additionalProperties: true
             system_prompt:
               type: string
+              description: "System prompt for the Claude Code agent"

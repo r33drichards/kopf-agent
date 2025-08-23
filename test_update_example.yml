@@ -1,0 +1,23 @@
+apiVersion: kopf.dev.claud-code/v1
+kind: ClaudCode
+metadata:
+  name: test-agent
+  namespace: default
+system_prompt: "You are a helpful AI assistant focused on code analysis and debugging."
+data:
+  ANTHROPIC_API_KEY: "sk-ant-test-key-123"
+  OPENAI_API_KEY: "sk-openai-test-key-456"
+  custom_config: "some additional configuration"
+---
+# Updated version to test the update handler
+apiVersion: kopf.dev.claud-code/v1
+kind: ClaudCode
+metadata:
+  name: test-agent
+  namespace: default
+system_prompt: "You are an advanced AI assistant specialized in software engineering and security analysis."
+data:
+  ANTHROPIC_API_KEY: "sk-ant-updated-key-789"
+  OPENAI_API_KEY: "sk-openai-updated-key-012"
+  custom_config: "updated configuration with new features"
+  new_setting: "additional setting for testing"

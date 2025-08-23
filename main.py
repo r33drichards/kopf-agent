@@ -745,78 +745,166 @@ def delete_claud_code_fn(body, **kwargs):
 
 
 @kopf.on.update("kopf.dev.claud-code", "v1", "claud-code")
-def update_system_prompt_fn(body, name, namespace, logger, diff, **kwargs):
+def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
     import kubernetes
     from kubernetes.client.exceptions import ApiException
 
     metadata_name = body["metadata"]["name"]
     agent_namespace = metadata_name  # Use agent name as namespace
-    new_system_prompt = body.get("system_prompt")
-
-    # Check if system_prompt changed
-    changed = False
+    
+    # Track what changes were made
+    system_prompt_changed = False
+    data_changed = False
+    
+    # Check what fields changed
     for d in diff:
         if d[1] == ("system_prompt",):
-            changed = True
-            break
-    if not changed:
-        logger.info("system_prompt not changed, skipping update.")
+            system_prompt_changed = True
+            logger.info(f"system_prompt changed: {d}")
+        elif d[1] == ("data",) or (len(d[1]) > 0 and d[1][0] == "data"):
+            data_changed = True
+            logger.info(f"data field changed: {d}")
+    
+    if not system_prompt_changed and not data_changed:
+        logger.info("No relevant fields changed, skipping update.")
         return
 
-    logger.info(
-        f"Updating system prompt for deployment {metadata_name} in namespace {agent_namespace}"
-    )
+    logger.info(f"Updating claud-code resource {metadata_name} in namespace {agent_namespace}")
 
-    # Get the current deployment
-    apps_v1_api = kubernetes.client.AppsV1Api()
-    try:
-        deployment = apps_v1_api.read_namespaced_deployment(
-            name=metadata_name, namespace=agent_namespace
-        )
-    except ApiException as e:
-        if e.status == 404:
-            logger.error(
-                f"Deployment {metadata_name} not found in namespace {agent_namespace}"
-            )
-            return
-        else:
-            raise
+    # Handle system_prompt updates
+    if system_prompt_changed:
+        new_system_prompt = body.get("system_prompt")
+        logger.info(f"Updating system prompt for deployment {metadata_name}")
 
-    # Update the system prompt in the container args
-    updated = False
-    for container in deployment.spec.template.spec.containers:
-        if container.name == metadata_name:
-            if container.args is None:
-                container.args = []
-            if "--system-prompt" in container.args:
-                idx = container.args.index("--system-prompt")
-                if idx + 1 < len(container.args):
-                    container.args[idx + 1] = new_system_prompt
-                    updated = True
-            else:
-                container.args.extend(["--system-prompt", new_system_prompt])
-                updated = True
-
-    if updated:
-        # Patch the deployment with the new args
+        # Get the current deployment
+        apps_v1_api = kubernetes.client.AppsV1Api()
         try:
-            # Only patch the relevant part
-            patch_body = {
-                "spec": {
-                    "template": {
-                        "spec": {
-                            "containers": [
-                                {"name": metadata_name, "args": container.args}
-                            ]
+            deployment = apps_v1_api.read_namespaced_deployment(
+                name=metadata_name, namespace=agent_namespace
+            )
+        except ApiException as e:
+            if e.status == 404:
+                logger.error(f"Deployment {metadata_name} not found in namespace {agent_namespace}")
+                return
+            else:
+                raise
+
+        # Update the system prompt in the container args
+        updated = False
+        for container in deployment.spec.template.spec.containers:
+            if container.name == metadata_name:
+                if container.args is None:
+                    container.args = []
+                if "--system-prompt" in container.args:
+                    idx = container.args.index("--system-prompt")
+                    if idx + 1 < len(container.args):
+                        container.args[idx + 1] = new_system_prompt
+                        updated = True
+                else:
+                    container.args.extend(["--system-prompt", new_system_prompt])
+                    updated = True
+
+        if updated:
+            # Patch the deployment with the new args
+            try:
+                patch_body = {
+                    "spec": {
+                        "template": {
+                            "spec": {
+                                "containers": [
+                                    {"name": metadata_name, "args": container.args}
+                                ]
+                            }
                         }
                     }
                 }
-            }
-            apps_v1_api.patch_namespaced_deployment(
-                name=metadata_name, namespace=agent_namespace, body=patch_body
-            )
-            logger.info(f"Updated system prompt for deployment {metadata_name}")
-        except ApiException as e:
-            logger.error(f"Failed to patch deployment: {e}")
-    else:
-        logger.info("No update needed for system prompt.")
+                apps_v1_api.patch_namespaced_deployment(
+                    name=metadata_name, namespace=agent_namespace, body=patch_body
+                )
+                logger.info(f"Successfully updated system prompt for deployment {metadata_name}")
+            except ApiException as e:
+                logger.error(f"Failed to patch deployment: {e}")
+                raise
+        else:
+            logger.info("No update needed for system prompt in deployment.")
+
+    # Handle data field updates
+    if data_changed:
+        data_field = body.get("data", {})
+        logger.info(f"Updating data field: {data_field}")
+        
+        # Update API secrets if API keys are in the data field
+        if "ANTHROPIC_API_KEY" in data_field or "OPENAI_API_KEY" in data_field:
+            logger.info("API keys found in data field, updating secrets")
+            try:
+                core_v1_api = kubernetes.client.CoreV1Api()
+                
+                # Update Anthropic API key if present
+                if "ANTHROPIC_API_KEY" in data_field:
+                    anthropic_key = data_field["ANTHROPIC_API_KEY"]
+                    secret_data = {"ANTHROPIC_API_KEY": base64.b64encode(anthropic_key.encode()).decode()}
+                    secret = kubernetes.client.V1Secret(
+                        metadata=kubernetes.client.V1ObjectMeta(name="anthropic-api-key"),
+                        data=secret_data,
+                        type="Opaque"
+                    )
+                    try:
+                        core_v1_api.replace_namespaced_secret(
+                            name="anthropic-api-key", namespace=agent_namespace, body=secret
+                        )
+                        logger.info("Updated anthropic-api-key secret")
+                    except ApiException as e:
+                        if e.status == 404:
+                            core_v1_api.create_namespaced_secret(namespace=agent_namespace, body=secret)
+                            logger.info("Created anthropic-api-key secret")
+                        else:
+                            raise
+                
+                # Update OpenAI API key if present
+                if "OPENAI_API_KEY" in data_field:
+                    openai_key = data_field["OPENAI_API_KEY"]
+                    secret_data = {"OPENAI_API_KEY": base64.b64encode(openai_key.encode()).decode()}
+                    secret = kubernetes.client.V1Secret(
+                        metadata=kubernetes.client.V1ObjectMeta(name="openai-api-key"),
+                        data=secret_data,
+                        type="Opaque"
+                    )
+                    try:
+                        core_v1_api.replace_namespaced_secret(
+                            name="openai-api-key", namespace=agent_namespace, body=secret
+                        )
+                        logger.info("Updated openai-api-key secret")
+                    except ApiException as e:
+                        if e.status == 404:
+                            core_v1_api.create_namespaced_secret(namespace=agent_namespace, body=secret)
+                            logger.info("Created openai-api-key secret")
+                        else:
+                            raise
+                            
+                # Restart deployment to pick up new secrets
+                apps_v1_api = kubernetes.client.AppsV1Api()
+                try:
+                    deployment = apps_v1_api.read_namespaced_deployment(
+                        name=metadata_name, namespace=agent_namespace
+                    )
+                    # Add or update restart annotation to trigger pod restart
+                    import datetime
+                    if deployment.spec.template.metadata.annotations is None:
+                        deployment.spec.template.metadata.annotations = {}
+                    deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    
+                    apps_v1_api.patch_namespaced_deployment(
+                        name=metadata_name, namespace=agent_namespace, body=deployment
+                    )
+                    logger.info("Restarted deployment to pick up updated secrets")
+                except ApiException as e:
+                    logger.error(f"Failed to restart deployment: {e}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to update API secrets: {e}")
+                raise
+        
+        # Handle other data field updates
+        logger.info(f"Data field updated with: {list(data_field.keys())}")
+
+    logger.info(f"Update handler completed for {metadata_name}")

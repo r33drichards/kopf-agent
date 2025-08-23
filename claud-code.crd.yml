@@ -34,3 +34,7 @@ spec:
             system_prompt:
               type: string
               description: "System prompt for the Claude Code agent"
+            mcp_config:
+              type: object
+              description: "MCP (Model Context Protocol) configuration for the Claude Code agent"
+              additionalProperties: true

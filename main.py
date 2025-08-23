@@ -63,6 +63,7 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
     agent_namespace = metadata_name  # Use agent name as namespace
     logger.info(f"creating claud-code agent in namespace: {agent_namespace}")
     metadata_system_prompt = body["system_prompt"]
+    mcp_config = body.get("mcp_config", {})
     # Create namespace if it doesn't exist
     core_v1_api = kubernetes.client.CoreV1Api()
     rbac_v1_api = kubernetes.client.RbacAuthorizationV1Api()
@@ -224,6 +225,28 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
         if e.status != 409:
             raise
     logger.info("created PVCs")
+    
+    # Create MCP config ConfigMap
+    logger.info("creating mcp config configmap")
+    import json
+    mcp_config_name = f"{metadata_name}-mcp-config"
+    mcp_config_json = json.dumps(mcp_config, indent=2)
+    mcp_configmap = kubernetes.client.V1ConfigMap(
+        metadata=kubernetes.client.V1ObjectMeta(name=mcp_config_name),
+        data={"mcp.json": mcp_config_json},
+    )
+    try:
+        core_v1_api.create_namespaced_config_map(
+            namespace=agent_namespace, body=mcp_configmap
+        )
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status == 409:  # AlreadyExists
+            core_v1_api.replace_namespaced_config_map(
+                name=mcp_config_name, namespace=agent_namespace, body=mcp_configmap
+            )
+        else:
+            raise
+    logger.info("created mcp config configmap")
     deployment = kubernetes.client.V1Deployment(
         metadata=kubernetes.client.V1ObjectMeta(name=metadata_name),
         spec=kubernetes.client.V1DeploymentSpec(
@@ -249,6 +272,8 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                                 "/data/metadata",
                                 "--system-prompt",
                                 metadata_system_prompt,
+                                "--mcp",
+                                "/config/mcp.json",
                             ],
                             env=[
                                 kubernetes.client.V1EnvVar(
@@ -277,6 +302,11 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                                 kubernetes.client.V1VolumeMount(
                                     name=f"{metadata_name}-metadata",
                                     mount_path="/data/metadata",
+                                ),
+                                kubernetes.client.V1VolumeMount(
+                                    name=f"{mcp_config_name}",
+                                    mount_path="/config/mcp.json",
+                                    sub_path="mcp.json",
                                 ),
                             ],
                             ports=[
@@ -323,6 +353,12 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                                 claim_name=f"{metadata_name}-metadata"
                             ),
                         ),
+                        kubernetes.client.V1Volume(
+                            name=f"{mcp_config_name}",
+                            config_map=kubernetes.client.V1ConfigMapVolumeSource(
+                                name=mcp_config_name
+                            ),
+                        ),
                     ],
                 ),
             ),
@@ -366,6 +402,7 @@ http {{
         else:
             raise
     logger.info("created nginx configmap")
+    
     logger.info("creating nginx deployment")
     nginx_name = f"{metadata_name}-nginx"
     nginx_deployment = kubernetes.client.V1Deployment(

@@ -1,16 +1,20 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: mcp-agent
+  name: mcp-agen
 
 mcp_config: {
   "mcpServers": {
     "playwright": {
       "command": "mcp-server-playwright",
+      "args": [
+        "--user-data-dir",
+        "/data/output/playwright-profile",
+        "--headless"
+      ]
     }
   }
 }
-
 system_prompt: |
   you are equipped with a service account that has access to the kubernetes cluster. 
   you can list all resources in your namespace, and also you can create services.

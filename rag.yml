@@ -1,7 +1,15 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: claud-code
+  name: mcp-agent
+
+mcp_config: {
+  "mcpServers": {
+    "playwright": {
+      "command": "mcp-server-playwright",
+    }
+  }
+}
 
 system_prompt: |
   you are equipped with a service account that has access to the kubernetes cluster. 

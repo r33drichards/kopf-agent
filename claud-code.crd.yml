@@ -37,4 +37,4 @@ spec:
             mcp_config:
               type: object
               description: "MCP (Model Context Protocol) configuration for the Claude Code agent"
-              additionalProperties: true
+              x-kubernetes-preserve-unknown-fields: true

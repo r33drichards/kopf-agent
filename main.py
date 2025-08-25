@@ -128,8 +128,7 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
             kubernetes.client.V1PolicyRule(
                 api_groups=[""],
                 resources=["persistentvolumeclaims"],
-                resource_names=[data_pvc_name],
-                verbs=["get", "list", "watch"],
+                verbs=["get", "list", "watch", "create", "update", "patch", "delete"],
             ),
             kubernetes.client.V1PolicyRule(
                 api_groups=[""],

@@ -842,9 +842,20 @@ def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
                 deployment.spec.template.metadata.annotations = {}
             deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             
-            # Patch the deployment to trigger rollout
+            # Patch only the annotation to trigger rollout
+            patch_body = {
+                "spec": {
+                    "template": {
+                        "metadata": {
+                            "annotations": {
+                                "kubectl.kubernetes.io/restartedAt": deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"]
+                            }
+                        }
+                    }
+                }
+            }
             apps_v1_api.patch_namespaced_deployment(
-                name=metadata_name, namespace=agent_namespace, body=deployment
+                name=metadata_name, namespace=agent_namespace, body=patch_body
             )
             logger.info(f"Successfully triggered rollout restart for deployment {metadata_name}")
         except ApiException as e:

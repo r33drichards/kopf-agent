@@ -1,7 +1,7 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: cc-ply
+  name: ccpl
 
 version: 22e7ffbf51600a372f11ed41190ee82f4c3b647f
 
@@ -499,6 +499,6 @@ system_prompt: |
 
 
     you have deployed along side you a playwright server that you can use to use as a browser.
-    http://playwright-server:3000/mcp is the url to use.
+    http://playwright-server:3000 is the url to use.
 
     the playwright package is also available in the python environment.

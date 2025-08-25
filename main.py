@@ -269,10 +269,10 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                     containers=[
                         kubernetes.client.V1Container(
                             name="playwright-server",
-                            image="mcr.microsoft.com/playwright:v1.55.0-noble",
+                            image="mcr.microsoft.com/playwright:v1.52.0-noble",
                             image_pull_policy="Always",
                             command=["/bin/sh"],
-                            args=["-c", "npx -y playwright@1.55.0 run-server --port 3000 --host 0.0.0.0"],
+                            args=["-c", "npx -y playwright@1.52.0 run-server --port 3000 --host 0.0.0.0"],
                             ports=[
                                 kubernetes.client.V1ContainerPort(
                                     name="playwright", container_port=3000

@@ -253,6 +253,92 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
         else:
             raise
     logger.info("created mcp config configmap")
+    
+    # Create Playwright server deployment
+    logger.info("creating playwright server deployment")
+    playwright_deployment = kubernetes.client.V1Deployment(
+        metadata=kubernetes.client.V1ObjectMeta(name=f"{metadata_name}-playwright-server"),
+        spec=kubernetes.client.V1DeploymentSpec(
+            replicas=1,
+            selector=kubernetes.client.V1LabelSelector(
+                match_labels={"app": f"{metadata_name}-playwright-server"}
+            ),
+            template=kubernetes.client.V1PodTemplateSpec(
+                metadata=kubernetes.client.V1ObjectMeta(labels={"app": f"{metadata_name}-playwright-server"}),
+                spec=kubernetes.client.V1PodSpec(
+                    containers=[
+                        kubernetes.client.V1Container(
+                            name="playwright-server",
+                            image="mcr.microsoft.com/playwright:v1.55.0-noble",
+                            image_pull_policy="Always",
+                            command=["/bin/sh"],
+                            args=["-c", "npx -y playwright@1.55.0 run-server --port 3000 --host 0.0.0.0"],
+                            ports=[
+                                kubernetes.client.V1ContainerPort(
+                                    name="playwright", container_port=3000
+                                )
+                            ],
+                            env=[
+                                kubernetes.client.V1EnvVar(
+                                    name="PWUSER_UID", value="1000"
+                                ),
+                                kubernetes.client.V1EnvVar(
+                                    name="PWUSER_GID", value="1000"
+                                ),
+                            ],
+                            security_context=kubernetes.client.V1SecurityContext(
+                                run_as_user=1000,
+                                run_as_group=1000,
+                            )
+                        )
+                    ],
+                    security_context=kubernetes.client.V1PodSecurityContext(
+                        run_as_user=1000,
+                        run_as_group=1000,
+                    )
+                ),
+            ),
+        ),
+    )
+    try:
+        kubernetes.client.AppsV1Api().create_namespaced_deployment(
+            body=playwright_deployment, namespace=agent_namespace
+        )
+        logger.info("created playwright server deployment")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"playwright server deployment already exists")
+
+    # Create Playwright server service
+    playwright_service = kubernetes.client.V1Service(
+        metadata=kubernetes.client.V1ObjectMeta(
+            name="playwright-server",
+            namespace=agent_namespace
+        ),
+        spec=kubernetes.client.V1ServiceSpec(
+            selector={"app": f"{metadata_name}-playwright-server"},
+            ports=[
+                kubernetes.client.V1ServicePort(
+                    name="playwright",
+                    port=3000,
+                    target_port=3000,
+                    protocol="TCP"
+                )
+            ]
+        )
+    )
+    
+    try:
+        core_v1_api.create_namespaced_service(
+            namespace=agent_namespace, body=playwright_service
+        )
+        logger.info(f"created playwright server service")
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 409:
+            raise
+        logger.info(f"playwright server service already exists")
+
     deployment = kubernetes.client.V1Deployment(
         metadata=kubernetes.client.V1ObjectMeta(name=metadata_name),
         spec=kubernetes.client.V1DeploymentSpec(
@@ -561,6 +647,16 @@ def delete_claud_code_fn(body, **kwargs):
             raise
     logger.info("deleted deployment")
     
+    # Delete Playwright server deployment
+    try:
+        kubernetes.client.AppsV1Api().delete_namespaced_deployment(
+            name=f"{metadata_name}-playwright-server", namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted playwright server deployment")
+    
     # Delete services
     logger.info("deleting services")
     try:
@@ -571,6 +667,16 @@ def delete_claud_code_fn(body, **kwargs):
         if e.status != 404:
             raise
     logger.info("deleted main service")
+    
+    # Delete Playwright server service
+    try:
+        kubernetes.client.CoreV1Api().delete_namespaced_service(
+            name="playwright-server", namespace=agent_namespace
+        )
+    except ApiException as e:
+        if e.status != 404:
+            raise
+    logger.info("deleted playwright server service")
     
     # Delete ingresses
     logger.info("deleting ingresses")

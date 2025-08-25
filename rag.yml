@@ -1,33 +1,16 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: bruuuuuse
-  namespace: bruuuuuse
+  name: cc
 
 mcp_config: {
     "mcpServers": {
       "playwright": {
-        "command": "mcp-server-playwright",
-        "args": [
-          "--user-data-dir",
-          "/data/output/playwright-profile",
-          "--headless",
-          "--no-sandbox",
-          "--disable-gpu",
-          "--disable-extensions",
-          "--disable-background-timer-throttling",
-          "--disable-backgrounding-occluded-windows",
-          "--disable-renderer-backgrounding"
-        ]
-      },
-      "filesystem": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data/output"]
+        "url": "http://playwright-server:3000/mcp"
       }
     }
 }
 system_prompt: |
-  UPDATED: Testing deployment rollout restart mechanism.
   you are equipped with a service account that has access to the kubernetes cluster. 
   you can list all resources in your namespace, and also you can create services.
 

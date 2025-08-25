@@ -664,6 +664,7 @@ def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
     # Track what changes were made
     system_prompt_changed = False
     data_changed = False
+    mcp_config_changed = False
     
     # Check what fields changed
     for d in diff:
@@ -673,8 +674,11 @@ def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
         elif d[1] == ("data",) or (len(d[1]) > 0 and d[1][0] == "data"):
             data_changed = True
             logger.info(f"data field changed: {d}")
+        elif d[1] == ("mcp_config",) or (len(d[1]) > 0 and d[1][0] == "mcp_config"):
+            mcp_config_changed = True
+            logger.info(f"mcp_config changed: {d}")
     
-    if not system_prompt_changed and not data_changed:
+    if not system_prompt_changed and not data_changed and not mcp_config_changed:
         logger.info("No relevant fields changed, skipping update.")
         return
 
@@ -789,25 +793,6 @@ def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
                             logger.info("Created openai-api-key secret")
                         else:
                             raise
-                            
-                # Restart deployment to pick up new secrets
-                apps_v1_api = kubernetes.client.AppsV1Api()
-                try:
-                    deployment = apps_v1_api.read_namespaced_deployment(
-                        name=metadata_name, namespace=agent_namespace
-                    )
-                    # Add or update restart annotation to trigger pod restart
-                    import datetime
-                    if deployment.spec.template.metadata.annotations is None:
-                        deployment.spec.template.metadata.annotations = {}
-                    deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                    
-                    apps_v1_api.patch_namespaced_deployment(
-                        name=metadata_name, namespace=agent_namespace, body=deployment
-                    )
-                    logger.info("Restarted deployment to pick up updated secrets")
-                except ApiException as e:
-                    logger.error(f"Failed to restart deployment: {e}")
                     
             except Exception as e:
                 logger.error(f"Failed to update API secrets: {e}")
@@ -815,5 +800,55 @@ def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
         
         # Handle other data field updates
         logger.info(f"Data field updated with: {list(data_field.keys())}")
+
+    # Handle mcp_config updates
+    if mcp_config_changed:
+        mcp_config = body.get("mcp_config", {})
+        logger.info(f"Updating MCP config for {metadata_name}")
+        
+        # Update the MCP config ConfigMap
+        import json
+        mcp_config_name = f"{metadata_name}-mcp-config"
+        mcp_config_json = json.dumps(mcp_config, indent=2)
+        mcp_configmap = kubernetes.client.V1ConfigMap(
+            metadata=kubernetes.client.V1ObjectMeta(name=mcp_config_name),
+            data={"mcp.json": mcp_config_json},
+        )
+        
+        try:
+            core_v1_api = kubernetes.client.CoreV1Api()
+            core_v1_api.replace_namespaced_config_map(
+                name=mcp_config_name, namespace=agent_namespace, body=mcp_configmap
+            )
+            logger.info(f"Successfully updated MCP config ConfigMap {mcp_config_name}")
+        except ApiException as e:
+            logger.error(f"Failed to update MCP config ConfigMap: {e}")
+            raise
+
+    # Trigger deployment rollout if any changes were made
+    if system_prompt_changed or data_changed or mcp_config_changed:
+        logger.info(f"Triggering deployment rollout for {metadata_name}")
+        
+        # Get the deployment and add/update restart annotation
+        apps_v1_api = kubernetes.client.AppsV1Api()
+        try:
+            deployment = apps_v1_api.read_namespaced_deployment(
+                name=metadata_name, namespace=agent_namespace
+            )
+            
+            # Add or update restart annotation to trigger pod restart
+            import datetime
+            if deployment.spec.template.metadata.annotations is None:
+                deployment.spec.template.metadata.annotations = {}
+            deployment.spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            
+            # Patch the deployment to trigger rollout
+            apps_v1_api.patch_namespaced_deployment(
+                name=metadata_name, namespace=agent_namespace, body=deployment
+            )
+            logger.info(f"Successfully triggered rollout restart for deployment {metadata_name}")
+        except ApiException as e:
+            logger.error(f"Failed to trigger deployment rollout: {e}")
+            raise
 
     logger.info(f"Update handler completed for {metadata_name}")

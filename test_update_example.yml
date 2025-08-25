@@ -8,6 +8,16 @@ data:
   ANTHROPIC_API_KEY: "sk-ant-test-key-123"
   OPENAI_API_KEY: "sk-openai-test-key-456"
   custom_config: "some additional configuration"
+mcp_config:
+  mcpServers:
+    filesystem:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/workspace"]
+    github:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_TOKEN: "ghp_test123"
 ---
 # Updated version to test the update handler
 apiVersion: kopf.dev.claud-code/v1
@@ -21,3 +31,18 @@ data:
   OPENAI_API_KEY: "sk-openai-updated-key-012"
   custom_config: "updated configuration with new features"
   new_setting: "additional setting for testing"
+mcp_config:
+  mcpServers:
+    filesystem:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/updated/path/to/workspace"]
+    github:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-github"]
+      env:
+        GITHUB_TOKEN: "ghp_updated456"
+    slack:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-slack"]
+      env:
+        SLACK_TOKEN: "xoxb-slack-token"

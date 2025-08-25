@@ -1,7 +1,7 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: browser-use
+  name: bbb
 
 mcp_config: {
     "mcpServers": {

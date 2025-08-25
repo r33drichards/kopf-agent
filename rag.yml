@@ -4,16 +4,23 @@ metadata:
   name: browser-use
 
 mcp_config: {
-  "mcpServers": {
-    "playwright": {
-      "command": "mcp-server-playwright",
-      "args": [
-        "--user-data-dir",
-        "/data/output/playwright-profile",
-        "--headless"
-      ]
+    "mcpServers": {
+      "playwright": {
+        "command": "mcp-server-playwright",
+        "args": [
+          "--user-data-dir",
+          "/data/output/playwright-profile",
+          "--headless",
+          "--no-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--disable-extensions",
+          "--disable-background-timer-throttling",
+          "--disable-backgrounding-occluded-windows",
+          "--disable-renderer-backgrounding"
+        ]
+      }
     }
-  }
 }
 system_prompt: |
   you are equipped with a service account that has access to the kubernetes cluster. 

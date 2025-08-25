@@ -308,6 +308,10 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                                     mount_path="/config/mcp.json",
                                     sub_path="mcp.json",
                                 ),
+                                kubernetes.client.V1VolumeMount(
+                                    name="tmp-volume",
+                                    mount_path="/tmp",
+                                ),
                             ],
                             ports=[
                                 kubernetes.client.V1ContainerPort(
@@ -357,6 +361,19 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                             name=f"{mcp_config_name}",
                             config_map=kubernetes.client.V1ConfigMapVolumeSource(
                                 name=mcp_config_name
+                            ),
+                        ),
+                        kubernetes.client.V1Volume(
+                            name="tmp-volume",
+                            ephemeral=kubernetes.client.V1EphemeralVolumeSource(
+                                volume_claim_template=kubernetes.client.V1PersistentVolumeClaimTemplate(
+                                    spec=kubernetes.client.V1PersistentVolumeClaimSpec(
+                                        access_modes=["ReadWriteOnce"],
+                                        resources=kubernetes.client.V1ResourceRequirements(
+                                            requests={"storage": "1Gi"}
+                                        ),
+                                    )
+                                )
                             ),
                         ),
                     ],

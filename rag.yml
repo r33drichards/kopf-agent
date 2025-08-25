@@ -1,7 +1,7 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: mcp-agen
+  name: browser-use
 
 mcp_config: {
   "mcpServers": {

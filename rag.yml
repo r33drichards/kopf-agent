@@ -1,7 +1,7 @@
 apiVersion: kopf.dev.claud-code/v1
 kind: ClaudCode
 metadata:
-  name: cc-playwright
+  name: cc-ply
 
 version: 22e7ffbf51600a372f11ed41190ee82f4c3b647f
 
@@ -497,3 +497,8 @@ system_prompt: |
 
     a note about rag. when doing rag queries on a git repo, you will get back a response that contains a citation with a path to the file it is from. if that information looks useful or surrounding info could give you more context, get that context. you can clone a repo if its not already in your projects directory. 
 
+
+    you have deployed along side you a playwright server that you can use to use as a browser.
+    http://playwright-server:3000/mcp is the url to use.
+
+    the playwright package is also available in the python environment.

@@ -969,7 +969,11 @@ def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
                         "template": {
                             "spec": {
                                 "containers": [
-                                    {"name": metadata_name, "image": container.image}
+                                    {
+                                        "name": metadata_name,
+                                        "image": container.image,
+                                        "args": container.args
+                                    }
                                 ]
                             }
                         }

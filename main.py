@@ -4,6 +4,7 @@ import kubernetes
 import dotenv
 import os
 import base64
+import uuid
 from kubernetes.client.models import RbacV1Subject
 
 dotenv.load_dotenv()
@@ -127,7 +128,7 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
             kubernetes.client.V1PolicyRule(
                 api_groups=[""],
                 resources=["persistentvolumeclaims"],
-                resource_names=[f"{metadata_name}-data"],
+                resource_names=[data_pvc_name],
                 verbs=["get", "list", "watch"],
             ),
             kubernetes.client.V1PolicyRule(
@@ -191,9 +192,15 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
     # and a data dir pvc
     # and create a nginx deployment to serve the data dir
     # also create a service for webagent
+    # Generate unique IDs for PVCs to avoid conflicts
+    unique_id = str(uuid.uuid4())[:8]  # Use first 8 chars of UUID
+    
     # create PVCs first
+    metadata_pvc_name = f"{metadata_name}-metadata-{unique_id}"
+    data_pvc_name = f"{metadata_name}-data-{unique_id}"
+    
     metadata_pvc = kubernetes.client.V1PersistentVolumeClaim(
-        metadata=kubernetes.client.V1ObjectMeta(name=f"{metadata_name}-metadata"),
+        metadata=kubernetes.client.V1ObjectMeta(name=metadata_pvc_name),
         spec=kubernetes.client.V1PersistentVolumeClaimSpec(
             access_modes=["ReadWriteOnce"],
             resources=kubernetes.client.V1ResourceRequirements(
@@ -202,7 +209,7 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
         ),
     )
     data_pvc = kubernetes.client.V1PersistentVolumeClaim(
-        metadata=kubernetes.client.V1ObjectMeta(name=f"{metadata_name}-data"),
+        metadata=kubernetes.client.V1ObjectMeta(name=data_pvc_name),
         spec=kubernetes.client.V1PersistentVolumeClaimSpec(
             access_modes=["ReadWriteOnce"],
             resources=kubernetes.client.V1ResourceRequirements(
@@ -328,11 +335,11 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                             ],
                             volume_mounts=[
                                 kubernetes.client.V1VolumeMount(
-                                    name=f"{metadata_name}-data",
+                                    name="data-volume",
                                     mount_path="/data/output",
                                 ),
                                 kubernetes.client.V1VolumeMount(
-                                    name=f"{metadata_name}-metadata",
+                                    name="metadata-volume",
                                     mount_path="/data/metadata",
                                 ),
                                 kubernetes.client.V1VolumeMount(
@@ -365,7 +372,7 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                             ],
                             volume_mounts=[
                                 kubernetes.client.V1VolumeMount(
-                                    name=f"{metadata_name}-data",
+                                    name="data-volume",
                                     mount_path="/home/coder/project",
                                 )
                             ],
@@ -378,15 +385,15 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                     ],
                     volumes=[
                         kubernetes.client.V1Volume(
-                            name=f"{metadata_name}-data",
+                            name="data-volume",
                             persistent_volume_claim=kubernetes.client.V1PersistentVolumeClaimVolumeSource(
-                                claim_name=f"{metadata_name}-data"
+                                claim_name=data_pvc_name
                             ),
                         ),
                         kubernetes.client.V1Volume(
-                            name=f"{metadata_name}-metadata",
+                            name="metadata-volume",
                             persistent_volume_claim=kubernetes.client.V1PersistentVolumeClaimVolumeSource(
-                                claim_name=f"{metadata_name}-metadata"
+                                claim_name=metadata_pvc_name
                             ),
                         ),
                         kubernetes.client.V1Volume(
@@ -422,92 +429,6 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
         if e.status != 409:
             raise
         logger.info(f"deployment {metadata_name} already exists")
-    logger.info("creating nginx configmap")
-    nginx_conf = f"""
-events {{}}
-http {{
-  server {{
-    listen 80;
-    root /data/output;
-    index index.html;
-    autoindex on;
-  }}
-}}
-"""
-    configmap_name = f"{metadata_name}-nginx-config"
-    nginx_configmap = kubernetes.client.V1ConfigMap(
-        metadata=kubernetes.client.V1ObjectMeta(name=configmap_name),
-        data={"nginx.conf": nginx_conf},
-    )
-    try:
-        core_v1_api.create_namespaced_config_map(
-            namespace=agent_namespace, body=nginx_configmap
-        )
-    except kubernetes.client.exceptions.ApiException as e:
-        if e.status == 409:  # AlreadyExists
-            core_v1_api.replace_namespaced_config_map(
-                name=configmap_name, namespace=agent_namespace, body=nginx_configmap
-            )
-        else:
-            raise
-    logger.info("created nginx configmap")
-    
-    logger.info("creating nginx deployment")
-    nginx_name = f"{metadata_name}-nginx"
-    nginx_deployment = kubernetes.client.V1Deployment(
-        metadata=kubernetes.client.V1ObjectMeta(name=nginx_name),
-        spec=kubernetes.client.V1DeploymentSpec(
-            replicas=1,
-            selector=kubernetes.client.V1LabelSelector(
-                match_labels={"app": nginx_name}
-            ),
-            template=kubernetes.client.V1PodTemplateSpec(
-                metadata=kubernetes.client.V1ObjectMeta(labels={"app": nginx_name}),
-                spec=kubernetes.client.V1PodSpec(
-                    containers=[
-                        kubernetes.client.V1Container(
-                            name=nginx_name,
-                            image="nginx:latest",
-                            volume_mounts=[
-                                kubernetes.client.V1VolumeMount(
-                                    name=f"{metadata_name}-data",
-                                    mount_path="/data/output",
-                                ),
-                                kubernetes.client.V1VolumeMount(
-                                    name=f"{configmap_name}",
-                                    mount_path="/etc/nginx/nginx.conf",
-                                    sub_path="nginx.conf",
-                                ),
-                            ],
-                        )
-                    ],
-                    volumes=[
-                        kubernetes.client.V1Volume(
-                            name=f"{metadata_name}-data",
-                            persistent_volume_claim=kubernetes.client.V1PersistentVolumeClaimVolumeSource(
-                                claim_name=f"{metadata_name}-data"
-                            ),
-                        ),
-                        kubernetes.client.V1Volume(
-                            name=f"{configmap_name}",
-                            config_map=kubernetes.client.V1ConfigMapVolumeSource(
-                                name=configmap_name
-                            ),
-                        ),
-                    ],
-                ),
-            ),
-        ),
-    )
-    try:
-        kubernetes.client.AppsV1Api().create_namespaced_deployment(
-            body=nginx_deployment, namespace=agent_namespace
-        )
-        logger.info("created nginx deployment")
-    except kubernetes.client.exceptions.ApiException as e:
-        if e.status != 409:
-            raise
-        logger.info(f"nginx deployment {nginx_name} already exists")
 
     # Create services for the deployments
     logger.info("creating services")
@@ -537,25 +458,6 @@ http {{
         )
     )
     
-    # Service for nginx deployment (port 80)
-    nginx_service = kubernetes.client.V1Service(
-        metadata=kubernetes.client.V1ObjectMeta(
-            name=f"{nginx_name}-service",
-            namespace=agent_namespace
-        ),
-        spec=kubernetes.client.V1ServiceSpec(
-            selector={"app": nginx_name},
-            ports=[
-                kubernetes.client.V1ServicePort(
-                    name="http",
-                    port=80,
-                    target_port=80,
-                    protocol="TCP"
-                )
-            ]
-        )
-    )
-    
     try:
         core_v1_api.create_namespaced_service(
             namespace=agent_namespace, body=main_service
@@ -565,16 +467,6 @@ http {{
         if e.status != 409:
             raise
         logger.info(f"main service {metadata_name}-service already exists")
-    
-    try:
-        core_v1_api.create_namespaced_service(
-            namespace=agent_namespace, body=nginx_service
-        )
-        logger.info(f"created nginx service: {nginx_name}-service")
-    except kubernetes.client.exceptions.ApiException as e:
-        if e.status != 409:
-            raise
-        logger.info(f"nginx service {nginx_name}-service already exists")
 
     # Create Tailscale ingresses
     logger.info("creating Tailscale ingresses")
@@ -628,30 +520,6 @@ http {{
         )
     )
     
-    # Ingress for nginx (port 80)
-    nginx_ingress = kubernetes.client.V1Ingress(
-        metadata=kubernetes.client.V1ObjectMeta(
-            name=f"{nginx_name}-ingress",
-            namespace=agent_namespace,
-        ),
-        spec=kubernetes.client.V1IngressSpec(
-            ingress_class_name="tailscale",
-            default_backend=kubernetes.client.V1IngressBackend(
-                service=kubernetes.client.V1IngressServiceBackend(
-                    name=f"{nginx_name}-service",
-                    port=kubernetes.client.V1ServiceBackendPort(
-                        number=80
-                    )
-                )
-            ),
-            tls=[
-                kubernetes.client.V1IngressTLS(
-                    hosts=[f"{metadata_name}-nginx"]
-                )
-            ]
-        )
-    )
-    
     networking_v1_api = kubernetes.client.NetworkingV1Api()
     
     try:
@@ -673,16 +541,6 @@ http {{
         if e.status != 409:
             raise
         logger.info(f"http ingress {metadata_name}-http-ingress already exists")
-    
-    try:
-        networking_v1_api.create_namespaced_ingress(
-            namespace=agent_namespace, body=nginx_ingress
-        )
-        logger.info(f"created nginx ingress: {nginx_name}-ingress")
-    except kubernetes.client.exceptions.ApiException as e:
-        if e.status != 409:
-            raise
-        logger.info(f"nginx ingress {nginx_name}-ingress already exists")
 
 
 # delete the deployment and service for the claud-code and nginx and remove the pvc
@@ -703,24 +561,6 @@ def delete_claud_code_fn(body, **kwargs):
         if e.status != 404:
             raise
     logger.info("deleted deployment")
-    logger.info("deleting nginx configmap")
-    try:
-        kubernetes.client.CoreV1Api().delete_namespaced_config_map(
-            name=f"{metadata_name}-nginx-config", namespace=agent_namespace
-        )
-    except ApiException as e:
-        if e.status != 404:
-            raise
-    logger.info("deleted nginx configmap")
-    logger.info("deleting nginx deployment")
-    try:
-        kubernetes.client.AppsV1Api().delete_namespaced_deployment(
-            name=f"{metadata_name}-nginx", namespace=agent_namespace
-        )
-    except ApiException as e:
-        if e.status != 404:
-            raise
-    logger.info("deleted nginx deployment")
     
     # Delete services
     logger.info("deleting services")
@@ -732,15 +572,6 @@ def delete_claud_code_fn(body, **kwargs):
         if e.status != 404:
             raise
     logger.info("deleted main service")
-    
-    try:
-        kubernetes.client.CoreV1Api().delete_namespaced_service(
-            name=f"{metadata_name}-nginx-service", namespace=agent_namespace
-        )
-    except ApiException as e:
-        if e.status != 404:
-            raise
-    logger.info("deleted nginx service")
     
     # Delete ingresses
     logger.info("deleting ingresses")
@@ -764,32 +595,25 @@ def delete_claud_code_fn(body, **kwargs):
             raise
     logger.info("deleted http ingress")
     
+    logger.info("deleting pvcs")
+    # Delete all PVCs with the metadata_name prefix
     try:
-        networking_v1_api.delete_namespaced_ingress(
-            name=f"{metadata_name}-nginx-ingress", namespace=agent_namespace
+        core_v1_api = kubernetes.client.CoreV1Api()
+        pvcs = core_v1_api.list_namespaced_persistent_volume_claim(
+            namespace=agent_namespace
         )
+        for pvc in pvcs.items:
+            if pvc.metadata.name.startswith(f"{metadata_name}-"):
+                try:
+                    core_v1_api.delete_namespaced_persistent_volume_claim(
+                        name=pvc.metadata.name, namespace=agent_namespace
+                    )
+                    logger.info(f"deleted pvc: {pvc.metadata.name}")
+                except ApiException as e:
+                    if e.status != 404:
+                        raise
     except ApiException as e:
-        if e.status != 404:
-            raise
-    logger.info("deleted nginx ingress")
-    
-    logger.info("deleting pvc")
-    try:
-        kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
-            name=f"{metadata_name}-metadata", namespace=agent_namespace
-        )
-    except ApiException as e:
-        if e.status != 404:
-            raise
-    logger.info("deleted metadata pvc")
-    try:
-        kubernetes.client.CoreV1Api().delete_namespaced_persistent_volume_claim(
-            name=f"{metadata_name}-data", namespace=agent_namespace
-        )
-    except ApiException as e:
-        if e.status != 404:
-            raise
-    logger.info("deleted data pvc")
+        logger.error(f"Error listing/deleting PVCs: {e}")
 
     # Clean up RBAC resources
     try:

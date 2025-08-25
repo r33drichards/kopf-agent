@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ master ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -56,6 +59,22 @@ jobs:
           ./result | gzip --fast | skopeo copy docker-archive:/dev/stdin docker://${SKOPEO_USER}/${{ matrix.flake_image }}:$TAG
           echo "Pushing ${{ matrix.flake_image }} with tag latest"
           ./result | gzip --fast | skopeo copy docker-archive:/dev/stdin docker://${SKOPEO_USER}/${{ matrix.flake_image }}:latest
+
+      - name: Update deployment image tag and push
+        if: ${{ github.ref_name == 'master' && github.actor != 'github-actions[bot]' }}
+        run: |
+          set -e
+          sed -i.bak "s|image: wholelottahoopla/kopf-agent:.*|image: wholelottahoopla/kopf-agent:${GITHUB_SHA}|" clusters/k3s/deployment.yaml
+          rm clusters/k3s/deployment.yaml.bak
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if ! git diff --quiet; then
+            git add clusters/k3s/deployment.yaml
+            git commit -m "chore: update kopf-agent image tag to ${GITHUB_SHA}"
+            git push
+          fi
 
       # Save Nix store cache after build
       - name: Save Nix store cache

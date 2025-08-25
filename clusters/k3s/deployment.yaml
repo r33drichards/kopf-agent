@@ -1,9 +1,3 @@
-# kopf-example namespace
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: kopfexample
-
 # kopf-example operator deployment
 ---
 apiVersion: apps/v1

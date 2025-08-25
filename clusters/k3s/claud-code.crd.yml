@@ -38,3 +38,6 @@ spec:
               type: object
               description: "MCP (Model Context Protocol) configuration for the Claude Code agent"
               x-kubernetes-preserve-unknown-fields: true
+            version:
+              type: string
+              description: "Version of the ClaudCode agent docker image, default is latest"

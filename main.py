@@ -338,6 +338,9 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
         if e.status != 409:
             raise
         logger.info(f"playwright server service already exists")
+        
+        
+    version = body.get("version", "latest")
 
     deployment = kubernetes.client.V1Deployment(
         metadata=kubernetes.client.V1ObjectMeta(name=metadata_name),
@@ -353,7 +356,7 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                     containers=[
                         kubernetes.client.V1Container(
                             name=metadata_name,
-                            image="wholelottahoopla/webagent:latest",
+                            image=f"wholelottahoopla/webagent:{version}",
                             image_pull_policy="Always",
                             args=[
                                 "--port",
@@ -771,6 +774,7 @@ def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
     system_prompt_changed = False
     data_changed = False
     mcp_config_changed = False
+    version_changed = False
     
     # Check what fields changed
     for d in diff:
@@ -783,8 +787,10 @@ def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
         elif d[1] == ("mcp_config",) or (len(d[1]) > 0 and d[1][0] == "mcp_config"):
             mcp_config_changed = True
             logger.info(f"mcp_config changed: {d}")
-    
-    if not system_prompt_changed and not data_changed and not mcp_config_changed:
+        elif d[1] == ("version",):
+            version_changed = True
+            logger.info(f"version changed: {d}")
+    if not system_prompt_changed and not data_changed and not mcp_config_changed and not version_changed:
         logger.info("No relevant fields changed, skipping update.")
         return
 
@@ -931,8 +937,56 @@ def update_claud_code_fn(body, name, namespace, logger, diff, **kwargs):
             logger.error(f"Failed to update MCP config ConfigMap: {e}")
             raise
 
+    # Handle version updates
+    if version_changed:
+        new_version = body.get("version")
+        logger.info(f"Updating version for deployment {metadata_name} to {new_version}")
+        # Get the current deployment
+        apps_v1_api = kubernetes.client.AppsV1Api()
+        try:
+            deployment = apps_v1_api.read_namespaced_deployment(
+                name=metadata_name, namespace=agent_namespace
+            )
+        except ApiException as e:
+            if e.status == 404:
+                logger.error(f"Deployment {metadata_name} not found in namespace {agent_namespace}")
+                return
+            else:
+                raise
+        
+        # update the image tag with the new version
+        updated = False
+        for container in deployment.spec.template.spec.containers:
+            if container.name == metadata_name:
+                container.image = f"wholelottahoopla/webagent:{new_version}"
+                updated = True
+        
+        if updated:
+            # Patch the deployment with the new image tag
+            try:
+                patch_body = {
+                    "spec": {
+                        "template": {
+                            "spec": {
+                                "containers": [
+                                    {"name": metadata_name, "image": container.image}
+                                ]
+                            }
+                        }
+                    }
+                }
+                apps_v1_api.patch_namespaced_deployment(
+                    name=metadata_name, namespace=agent_namespace, body=patch_body
+                )
+                logger.info(f"Successfully updated image tag for deployment {metadata_name}")
+            except ApiException as e:
+                logger.error(f"Failed to patch deployment: {e}")
+                raise
+        else:
+            logger.info("No update needed for image tag in deployment.")
+
     # Trigger deployment rollout if any changes were made
-    if system_prompt_changed or data_changed or mcp_config_changed:
+    if system_prompt_changed or data_changed or mcp_config_changed or version_changed:
         logger.info(f"Triggering deployment rollout for {metadata_name}")
         
         # Get the deployment and add/update restart annotation

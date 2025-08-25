@@ -301,6 +301,30 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                                     name="TMPDIR",
                                     value="/tmp"
                                 ),
+                                kubernetes.client.V1EnvVar(
+                                    name="HOME",
+                                    value="/data/output"
+                                ),
+                                kubernetes.client.V1EnvVar(
+                                    name="XDG_CONFIG_HOME",
+                                    value="/data/output/.config"
+                                ),
+                                kubernetes.client.V1EnvVar(
+                                    name="XDG_DATA_HOME",
+                                    value="/data/output/.local/share"
+                                ),
+                                kubernetes.client.V1EnvVar(
+                                    name="XDG_CACHE_HOME",
+                                    value="/data/output/.cache"
+                                ),
+                                kubernetes.client.V1EnvVar(
+                                    name="CHROME_USER_DATA_DIR",
+                                    value="/data/output/.config/google-chrome"
+                                ),
+                                kubernetes.client.V1EnvVar(
+                                    name="CHROME_CRASH_PIPE",
+                                    value="/data/output/.config/google-chrome/crash-pipe"
+                                ),
                             ],
                             volume_mounts=[
                                 kubernetes.client.V1VolumeMount(

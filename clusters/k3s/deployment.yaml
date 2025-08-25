@@ -20,7 +20,7 @@ spec:
       serviceAccountName: kopfexample-account
       containers:
       - name: the-only-one
-        image: wholelottahoopla/kopf-agent:8f2606e05d797ee12f9e38cd235eb8c539d2b788
+        image: wholelottahoopla/kopf-agent:ab7948bf41cbe6d16fa7ca6cb4df1fd7df1aad54
         imagePullPolicy: Always
         env:
         - name: ANTHROPIC_API_KEY

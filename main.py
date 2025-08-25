@@ -293,6 +293,14 @@ def create_claud_code_fn(body, name, namespace, logger, **kwargs):
                                         )
                                     ),
                                 ),
+                                kubernetes.client.V1EnvVar(
+                                    name="MPLCONFIGDIR",
+                                    value="/tmp/matplotlib"
+                                ),
+                                kubernetes.client.V1EnvVar(
+                                    name="TMPDIR",
+                                    value="/tmp"
+                                ),
                             ],
                             volume_mounts=[
                                 kubernetes.client.V1VolumeMount(
